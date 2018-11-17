@@ -8,7 +8,6 @@ defmodule Application1 do
       1..num_of_nodes
       |> Enum.to_list()
       |> Enum.map(fn x ->
-        # Change later if slow
         identifier = :crypto.hash(:sha, Integer.to_string(x)) |> Base.encode16()
 
         Supervisor.child_spec(
@@ -24,36 +23,54 @@ defmodule Application1 do
   end
 
   def start_blockchain() do
-    [
-      %{
-        :index => 1,
-        :nonce => 2,
-        # :coinbase => [],
-        # :difficulty => ?,
-        :tx => "abc",
-        :prev_hash => "00_000_000_000_000",
-        :time_stamp => 1_542_078_479,
-        :difficulty => 0,
-        :hash => "C16BE0090E95E0FDA0BD22F95E9D5B4B9B1331EE"
-      }
-    ]
-  end
-
-  def find_nonce_and_hash(index, tx, prev_hash, time_stamp, nonce) do
-    ip =
-      Integer.to_string(index) <>
-        tx <> prev_hash <> Integer.to_string(nonce) <> Integer.to_string(time_stamp)
-
-    hex_hash = :crypto.hash(:sha, ip) |> Base.encode16()
-    {int_hash, _} = hex_hash |> Integer.parse(16)
 
     {nonce, hex_hash} =
-      if rem(int_hash, 2) == 0 do
+      find_nonce_and_hash(1, "00_000_000_000_000", 1_542_078_479, "FirstBlock", 0)
+    
+    [
+      %{
+        # Header 
+        :index => 1,
+        :hash => hex_hash,
+        :prev_hash => "00_000_000_000_000",
+        :time => 1_542_078_479,
+        :nonce => nonce,
+
+        # Transaction Data
+        :mrkl_root => "FirstBlock",
+        :n_tx => 0,
+        :tx => [],
+        :mrkl_tree => [],
+        :difficulty => 1,
+      }
+    ]
+
+  end
+
+  # Return Nonce and hexadecimal hash
+  def find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce) do
+    
+    hex_hash =
+      get_hash(index, prev_hash, time, mrkl_root, nonce)
+
+    {nonce, hex_hash} =
+      # Check if first digit is zero 
+      if Enum.at(Integer.digits(hex_hash), 0) == 0 do
         {nonce, hex_hash}
       else
-        find_nonce_and_hash(index, tx, prev_hash, time_stamp, nonce + 1)
+        find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce + 1)
       end
   end
+
+  # Return hexadecimal hash
+  def get_hash(index, prev_hash, time, mrkl_root, nonce) do
+    ip =
+      Integer.to_string(index) <>
+      prev_hash <> Integer.to_string(time) <> mrkl_root <> Integer.to_string(nonce) 
+
+    hex_hash = :crypto.hash(:sha, ip) |> Base.encode16()
+  end
+
 
   # def test_add_transaction(transaction, chain) when is_binary(transaction) do
   #   prev_block = Enum.at(chain, 0)
