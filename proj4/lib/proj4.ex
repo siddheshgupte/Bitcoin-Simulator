@@ -50,7 +50,7 @@ defmodule Proj4 do
        get_mrkl_tree_and_root(curr_tx)
     
     {curr_nonce, curr_hash} =
-      find_nonce_and_hash(curr_index, curr_tx, curr_prev_hash, curr_time, 0)
+      find_nonce_and_hash(curr_index, curr_prev_hash, curr_time, curr_mrkl_root, 0)
 
     # Make block
     curr_block = %{
@@ -101,7 +101,7 @@ defmodule Proj4 do
 
     {nonce, hex_hash} =
       # Check if first digit is zero 
-      if Enum.at(Integer.digits(hex_hash), 0) == 0 do
+      if String.slice(hex_hash, 0, 1) == "0" do
         {nonce, hex_hash}
       else
         find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce + 1)
@@ -111,8 +111,7 @@ defmodule Proj4 do
   # Return hexadecimal hash
   defp get_hash(index, prev_hash, time, mrkl_root, nonce) do
     ip =
-      Integer.to_string(index) <>
-      prev_hash <> Integer.to_string(time) <> mrkl_root <> Integer.to_string(nonce) 
+      Integer.to_string(index) <> prev_hash <> Integer.to_string(time) <> mrkl_root <> Integer.to_string(nonce) 
 
     hex_hash = :crypto.hash(:sha, ip) |> Base.encode16()
   end

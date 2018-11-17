@@ -55,7 +55,7 @@ defmodule Application1 do
 
     {nonce, hex_hash} =
       # Check if first digit is zero 
-      if Enum.at(Integer.digits(hex_hash), 0) == 0 do
+      if String.slice(hex_hash, 0, 1) == "0" do
         {nonce, hex_hash}
       else
         find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce + 1)
