@@ -19,14 +19,22 @@ defmodule Application1 do
     opts = [strategy: :one_for_one, name: Supervisor]
     {:ok, supervisor} = Supervisor.start_link(children, opts)
 
-    Supervisor.which_children(supervisor)
+    # Get list of all children of the supervisor
+    lst_of_nodes =
+      Supervisor.which_children(supervisor)
+      |> IO.inspect()
+      |> Enum.map(fn x -> elem(x, 0) end)
+
+    # Make a fully connected network
+    Enum.each(lst_of_nodes, fn x ->
+      GenServer.cast(x, {:set_neighbours, List.delete(lst_of_nodes, x)})
+    end)
   end
 
   def start_blockchain() do
-
     {nonce, hex_hash} =
       find_nonce_and_hash(1, "00_000_000_000_000", 1_542_078_479, "FirstBlock", 0)
-    
+
     [
       %{
         # Header 
@@ -41,20 +49,17 @@ defmodule Application1 do
         :n_tx => 0,
         :tx => [],
         :mrkl_tree => [],
-        :difficulty => 1,
+        :difficulty => 1
       }
     ]
-
   end
 
   # Return Nonce and hexadecimal hash
   def find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce) do
-    
-    hex_hash =
-      get_hash(index, prev_hash, time, mrkl_root, nonce)
+    hex_hash = get_hash(index, prev_hash, time, mrkl_root, nonce)
 
+    # Check if first digit is zero 
     {nonce, hex_hash} =
-      # Check if first digit is zero 
       if String.slice(hex_hash, 0, 1) == "0" do
         {nonce, hex_hash}
       else
@@ -66,33 +71,8 @@ defmodule Application1 do
   def get_hash(index, prev_hash, time, mrkl_root, nonce) do
     ip =
       Integer.to_string(index) <>
-      prev_hash <> Integer.to_string(time) <> mrkl_root <> Integer.to_string(nonce) 
+        prev_hash <> Integer.to_string(time) <> mrkl_root <> Integer.to_string(nonce)
 
     hex_hash = :crypto.hash(:sha, ip) |> Base.encode16()
   end
-
-
-  # def test_add_transaction(transaction, chain) when is_binary(transaction) do
-  #   prev_block = Enum.at(chain, 0)
-
-  #   # Initializations
-  #   curr_index = prev_block.index + 1
-  #   curr_tx = transaction
-  #   curr_prev_hash = prev_block.hash
-  #   {curr_nonce, curr_hash} = find_nonce(curr_index, curr_tx, curr_prev_hash, 0)
-
-  #   # Make block
-  #   curr_block = 
-  #   %{
-  #     :index => curr_index,
-  #     :nonce => curr_nonce,
-  #     # :coinbase => [],
-  #     :tx => curr_tx,
-  #     :prev_hash => curr_prev_hash,
-  #     :hash => curr_hash,
-  #   }
-
-  #   # Add block to blockchain
-  #   chain = [curr_block | chain]
-  # end
 end
