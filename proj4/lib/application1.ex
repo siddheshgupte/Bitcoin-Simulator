@@ -2,14 +2,20 @@ defmodule Application1 do
   use Application
 
   def start(_type, num_of_nodes) do
-    genesis_block = start_blockchain()
 
-    children =
+    list_of_public_keys = 
       1..num_of_nodes
-      |> Enum.to_list()
+      # |> Enum.to_list()
       |> Enum.map(fn x ->
         identifier = :crypto.hash(:sha, Integer.to_string(x)) |> Base.encode16()
+      end)
 
+    genesis_block = start_blockchain(list_of_public_keys)
+
+    children =
+      list_of_public_keys
+      |> Enum.to_list()
+      |> Enum.map(fn identifier ->
         Supervisor.child_spec(
           {Proj4, [String.to_atom("#{identifier}"), genesis_block]},
           id: String.to_atom("#{identifier}")
@@ -31,9 +37,36 @@ defmodule Application1 do
     end)
   end
 
-  def start_blockchain() do
+  def make_coinbase(key) do
+    transaction = 
+      %{
+        :in => [
+          %{
+            # previous txid that we are claiming
+            :hash => 000000000  ,
+            # Index of transaction in the block
+            :n => 0,
+          }
+        ],
+        :out => [
+          %{
+          :sender => "coinbase",
+          :receiver => key,
+          :amount => 25.0,
+          :n => 0,
+          }
+        ],
+        :txid => :crypto.hash(:sha, "coinbase" <> key <> "25.0") |> Base.encode16(),
+      }
+  end
+
+  def start_blockchain(list_of_public_keys) do
     {nonce, hex_hash} =
       find_nonce_and_hash(1, "00_000_000_000_000", 1_542_078_479, "FirstBlock", 0)
+
+    txs =
+      list_of_public_keys
+        |> Enum.map(fn x -> make_coinbase(x) end)
 
     [
       %{
@@ -47,7 +80,7 @@ defmodule Application1 do
         # Transaction Data
         :mrkl_root => "FirstBlock",
         :n_tx => 0,
-        :tx => [],
+        :tx => txs,
         :mrkl_tree => [],
         :difficulty => 1
       }

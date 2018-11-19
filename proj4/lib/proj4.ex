@@ -20,26 +20,92 @@ defmodule Proj4 do
     {:ok, initial_map}
   end
 
+  # Return a list of maps of form %{:in => txid, :n => index}
+  defp find_inputs(sender, amount, chain, transaction_ips) do
+    # VERIFY INPUTS
+    # 1. Check if the sender was the receiver in those transactions
+    # 2. Check if sum of all those amounts >= amount
+
+    # TODO
+
+    # List of txids from transaction_ips that we have to find
+    txids_to_find = 
+      transaction_ips
+        |> Enum.map(fn x -> x.hash end)
+
+    txs =
+      chain
+        |> Enum.map(fn x ->
+           x.tx |> Enum.filter(fn y -> if y.txid in txids_to_find, do: y, else: nil end)
+          end)
+        |> Enum.filter(fn x -> x != nil end)
+
+    
+    # transaction_ips
+    #   |> Enum.map(fn x -> Enum.filter(txs, fn y -> y.out.n == x.n end) end)
+    #   |> Enum.filter(fn x -> x.receiver == sender end)
+    #   |> IO.inspect
+
+  end
+
+  # Take input as a space separated string of the form "Sender Receiver Amount"
+  # Transaction_ips is a list of transactions to use as input for this transaction
+  # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
+  def handle_cast({:make_transaction, ip_string, transaction_ips}, current_map) do
+
+    # Split the input string
+    # h1 h2 100
+    [sender, receiver, amount] = String.split(ip_string)
+
+    find_inputs(sender, 100, current_map.chain, transaction_ips)
+
+    # # Make transaction
+    transaction = 
+      %{
+        # Format for :in => [%{:hash, :n}, ...]
+        :in => transaction_ips,
+
+        :out => [
+          %{
+          :sender => String.to_atom(sender),
+          :receiver => String.to_atom(receiver),
+          :amount => amount,
+          :n => 0,
+          }
+        ],
+
+        :txid => :crypto.hash(:sha, sender <> receiver <> amount) |> Base.encode16(),
+      }
+    
+    IO.inspect transaction
+    
+    GenServer.cast(self(), {:add_transaction, transaction})
+
+    {:noreply, current_map}
+  end
+
   # Adds a transaction to the front of the local uncommitted transaction list if valid
   # Also will start the transaction gossip
-  def handle_cast({:add_transaction, transaction}, current_map) when is_binary(transaction) do
+  def handle_cast({:add_transaction, transaction}, current_map) do
     # Check if transaction is valid
-    check_if_transaction_valid()
-    check_if_double_spend()
+    if check_if_transaction_valid(transaction) do
 
-    # Add to local uncommitted transactions
-    {_, current_map} =
-      Map.get_and_update(current_map, :uncommitted_transactions, fn x ->
-        {x, [transaction | x]}
-      end)
+      check_signature()
+      check_if_double_spend()
 
-    # Start gossip
-    # Send to 8 random neighbours
+      # Add to local uncommitted transactions
+      {_, current_map} =
+        Map.get_and_update(current_map, :uncommitted_transactions, fn x ->
+          {x, [transaction | x]}
+        end)
 
-    current_map.neighbours
-    |> Enum.take_random(8)
-    |> Enum.map(&GenServer.cast(&1, {:gossip_transaction, transaction}))
+      # Start gossip
+      # Send to 8 random neighbours
 
+      current_map.neighbours
+      |> Enum.take_random(8)
+      |> Enum.map(&GenServer.cast(&1, {:gossip_transaction, transaction}))
+    end
     {:noreply, current_map}
   end
 
@@ -55,6 +121,14 @@ defmodule Proj4 do
 
     curr_tx =
       get_list_highest_priority_uncommitted_transactions(current_map.uncommitted_transactions)
+
+    # Remove from uncommitted transactions
+    {_, current_map} =
+      remove_transactions_from_uncommitted_transactions(curr_tx, current_map) 
+    
+    # Make coinbase transaction and add to curr_tx
+    curr_tx =
+      add_coinbase_transaction(current_map.public_key, curr_tx)
 
     {curr_mrkl_root, curr_mrkl_tree} = get_mrkl_tree_and_root(curr_tx)
 
@@ -81,7 +155,6 @@ defmodule Proj4 do
     # Add block to local chain
     {_, current_map} = Map.get_and_update(current_map, :chain, fn x -> {x, [curr_block | x]} end)
 
-    # TODO: send the updated chain to all nodes in the system. 
     # Start gossip
     # Send to 8 random neighbours
 
@@ -120,7 +193,7 @@ defmodule Proj4 do
   def handle_cast({:gossip_transaction, transaction}, current_map) do
     {should_propagate, current_map} =
       if not Enum.member?(current_map.uncommitted_transactions, transaction) do
-        check_if_transaction_valid()
+        check_if_transaction_valid(transaction)
         check_if_double_spend()
 
         # Add to uncommitted transactions
@@ -175,6 +248,10 @@ defmodule Proj4 do
           {x, [block | x]}
         end)
         
+        # Remove from uncommitted transactions
+        {_, map_to_return} =
+          remove_transactions_from_uncommitted_transactions(block.tx, map_to_return)
+
         # {should_propagate, current_map}
         {true, map_to_return}
       else
@@ -249,6 +326,33 @@ defmodule Proj4 do
     length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0
   end
 
+  defp add_coinbase_transaction(public_key, curr_tx) do
+
+    coinbase = 
+      %{
+        # Format for :in => [%{:hash, :n}, ...]
+        :in => [
+          %{
+            :hash => 000000000,
+            :n => 0,
+          }
+        ],
+
+        :out => [
+          %{
+          :sender => "coinbase",
+          :receiver =>  public_key,
+          :amount => 25.0,
+          :n => 0,
+          }
+        ],
+
+        :txid => :crypto.hash(:sha, "coinbase" <> Atom.to_string(public_key) <> "25.0") |> Base.encode16(),
+      }
+    
+    [coinbase | curr_tx]
+  end
+
   defp get_list_highest_priority_uncommitted_transactions(lst_uncommitted_transactions) do
     # TODO: Return transactions according to the fees here
     lst_uncommitted_transactions
@@ -256,12 +360,16 @@ defmodule Proj4 do
 
   defp get_mrkl_tree_and_root(lst_tx) do
     # TODO: Implement Merkle Tree
-    hashed = :crypto.hash(:sha, Enum.at(lst_tx, 0)) |> Base.encode16()
+    hashed = "TODO"
+    
     {hashed, hashed}
   end
 
-  defp check_if_transaction_valid() do
+  defp check_if_transaction_valid(transaction_map) do
     # TODO: Implement this
+    # :crypto.hash(:sha, transaction_map.sender <> transaction_map.receiver <> Float.to_string(transaction_map.amount))
+    #  |> Base.encode16() == transaction_map.txid
+    true 
   end
 
   defp check_if_double_spend() do
@@ -274,6 +382,16 @@ defmodule Proj4 do
     # Return true for now because this is being used in mine method
     true
     # Foreach transaction in block call check_if_transaction_valid()
+  end
+
+  defp check_signature() do
+    # TODO: Implement this
+  end
+
+  defp remove_transactions_from_uncommitted_transactions(tx_to_remove, current_map) do
+
+    new_uncommitted = Enum.filter(current_map.uncommitted_transactions, fn x -> x not in tx_to_remove end)
+    Map.get_and_update(current_map, :uncommitted_transactions, fn x -> {x, new_uncommitted} end)
   end
 
   # CAST EXAMPLE 
@@ -301,3 +419,5 @@ defmodule Proj4 do
   #   # end
   # end
 end
+
+# GenServer.cast(:B1D5781111D84F7B3FE45A0852E59758CD7A87E5, {:make_transaction,":B1D5781111D84F7B3FE45A0852E59758CD7A87E5 :AC3478D69A3C81FA62E60F5C3696165A4E5E6AC4 10.0"  , [ %{ :hash => "567E353A9DF286023A5214C5A2B7B5C70B971C64", :n => 0 }]})
