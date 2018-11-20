@@ -393,9 +393,20 @@ defmodule Proj4 do
 
   defp get_mrkl_tree_and_root(lst_tx) do
     # TODO: Implement Merkle Tree
-    hashed = "TODO"
+
+    # # if length is not even
+    # if length(lst_tx) |> rem(2) !=0 do
+    #   lst_tx ++ List.last(lst_tx)
+    # end 
+      
+    # lst_of_list=Enum.chunk_every(lst_tx,2)
+
     
-    {hashed, hashed}
+    # lst_of_list=Enum.map(lst_of_list, fn [x,y] -> :crypto.hash(:sha256,x) + :crypto.hash(:sha256,x) )
+
+    hashed = MerkleTreeNode.build(lst_tx)
+    
+    {hashed.value, hashed}
   end
 
   defp check_if_transaction_valid(transaction_map) do
@@ -502,3 +513,4 @@ defmodule Proj4 do
 end
 
 # GenServer.cast(:B1D5781111D84F7B3FE45A0852E59758CD7A87E5, {:make_transaction,"B1D5781111D84F7B3FE45A0852E59758CD7A87E5 AC3478D69A3C81FA62E60F5C3696165A4E5E6AC4 10.0"  , [ %{ :hash => "567E353A9DF286023A5214C5A2B7B5C70B971C64", :n => 0 }]})
+# GenServer.cast(:DA4B9237BACCCDF19C0760CAB7AEC4A8359010B0,{:mine})
