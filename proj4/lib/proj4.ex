@@ -59,8 +59,6 @@ defmodule Proj4 do
       # Sum all the amounts in referenced transaction and compare to amount being sent.
       are_inputs_valid? = Enum.sum(amounts_to_sender_in_ip_transactions) >= String.to_float(amount)
       
-      IO.inspect are_inputs_valid?
-
       if are_inputs_valid? do
         {are_inputs_valid?, Enum.sum(amounts_to_sender_in_ip_transactions) - String.to_float(amount)}
       else
@@ -101,17 +99,17 @@ defmodule Proj4 do
           }
         ],
 
-        :txid => :crypto.hash(:sha, sender <> receiver <> amount) |> Base.encode16(),
+        :txid => "Placeholder",
       }
 
-    # Add change address to transaction
+    # Add change address and set overall hash of transaction
     transaction =
-      add_change_address_to_transaction(transaction, balance, sender)
-    
-    find_overall_hash_of_transaction()
-
-    IO.inspect transaction
-    
+      transaction 
+        # Add change address to transaction
+        |> add_change_address_to_transaction(balance, sender)
+        # Set overall hash of the transaction
+        |>find_and_set_overall_hash_of_transaction()
+          
     GenServer.cast(self(), {:add_transaction, transaction})
 
     {:noreply, current_map}
@@ -354,8 +352,6 @@ defmodule Proj4 do
         x.hash != get_hash(x.index, x.prev_hash, x.time, x.mrkl_root, x.nonce)
       end)
 
-    IO.inspect(length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0)
-
     length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0
   end
 
@@ -444,8 +440,6 @@ defmodule Proj4 do
   # sender is string
   defp add_change_address_to_transaction(transaction, balance, sender) do
 
-    # TODO: Implement this
-
     # Format for transaction is as follows
     # transaction = 
     #   %{
@@ -482,8 +476,61 @@ defmodule Proj4 do
     transaction
   end
 
-  defp find_overall_hash_of_transaction() do
+  defp find_and_set_overall_hash_of_transaction(transaction) do
     # TODO: Implement this
+
+    # transaction format is
+    # %{
+    #   in: [%{hash: "567E353A9DF286023A5214C5A2B7B5C70B971C64", n: 0}],
+    #   out: [
+    #     %{
+    #       amount: 15.0,
+    #       n: 1,
+    #       receiver: "B1D5781111D84F7B3FE45A0852E59758CD7A87E5",
+    #       sender: "B1D5781111D84F7B3FE45A0852E59758CD7A87E5"
+    #     },
+    #     %{
+    #       amount: 10.0,
+    #       n: 0,
+    #       receiver: "AC3478D69A3C81FA62E60F5C3696165A4E5E6AC4",
+    #       sender: "B1D5781111D84F7B3FE45A0852E59758CD7A87E5"
+    #     }
+    #   ],
+    #   txid: "4FAAE7EB28C9A0D2D4CE6A4342E66D1A7AA31DEA"
+    # }
+    
+    # {receivers, senders, amounts} =
+    #   for tx <- transaction.out,
+    #     do: {tx.receiver, tx.sender, tx.amount}
+    
+    
+    senders =
+    for tx <- transaction.out,
+      do: tx.sender
+    
+    receivers =
+    for tx <- transaction.out,
+      do: tx.receiver
+   
+    amounts =
+    for tx <- transaction.out,
+      do: tx.amount
+    
+    senders = Enum.sort(senders)
+    receivers = Enum.sort(receivers)
+    amounts = Enum.sort(amounts)
+    
+    senders = Enum.join(senders, "")
+    receivers = Enum.join(receivers, "")
+    amounts = Enum.join(amounts, "")
+  
+    txid_to_set = :crypto.hash(:sha, senders <> receivers <> amounts) |> Base.encode16()
+
+    {_, transaction} =
+      Map.get_and_update(transaction, :txid, fn x -> {x, txid_to_set} end)
+    
+    # Return updated map with the new hash
+    transaction
   end
 
   # CAST EXAMPLE 
