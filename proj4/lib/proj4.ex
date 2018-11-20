@@ -20,9 +20,11 @@ defmodule Proj4 do
     {:ok, initial_map}
   end
 
+  # Returns a tuple {are_inputs_valid?, balance}
+  # are_inputs_valid? is a boolean 
+  # balance is a float (amounts in referred transactions - amount to send)
   # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
-  defp are_inputs_valid?(sender, amount, chain, transaction_ips) do
-    IO.inspect amount
+  defp are_inputs_valid_and_difference(sender, amount, chain, transaction_ips) do
 
     # VERIFY INPUTS
     # 1. Check if the sender was the receiver in those transactions
@@ -32,24 +34,38 @@ defmodule Proj4 do
     txids_to_find = 
       transaction_ips
         |> Enum.map(fn x -> x.hash end)
-        # |> IO.inspect 
 
+    # Anonymous functions for filtering in the comprehensions
     ele_in_txids_to_find? = &(&1 in txids_to_find)
-    receiver_matching? = &(Atom.to_string(&1) == String.slice(sender, 1..-1))
+    # receiver_matching? = &(Atom.to_string(&1) == String.slice(sender, 1..-1))
+    receiver_matching? = &(&1 == sender)
 
+    # List of amounts in the referenced transactions
     amounts_to_sender_in_ip_transactions =
       for block <- chain,
         tx_in_block <- block.tx, ele_in_txids_to_find?.(tx_in_block.txid),
           tx_out <- tx_in_block.out, receiver_matching?.(tx_out.receiver),
             ip_to_find <- transaction_ips, ele_in_txids_to_find?.(ip_to_find.hash)
           do
+            # Check index
             if tx_out.n == ip_to_find.n do
+              # return amount in this transaction
               tx_out.amount
             end
           end
 
-      IO.inspect Enum.sum(amounts_to_sender_in_ip_transactions)
-      IO.inspect Enum.sum(amounts_to_sender_in_ip_transactions) >= String.to_float(amount)
+      # IO.inspect Enum.sum(amounts_to_sender_in_ip_transactions)
+      
+      # Sum all the amounts in referenced transaction and compare to amount being sent.
+      are_inputs_valid? = Enum.sum(amounts_to_sender_in_ip_transactions) >= String.to_float(amount)
+      
+      IO.inspect are_inputs_valid?
+
+      if are_inputs_valid? do
+        {are_inputs_valid?, Enum.sum(amounts_to_sender_in_ip_transactions) - String.to_float(amount)}
+      else
+        {are_inputs_valid?, 0.0}
+      end
   end
 
   # Take input as a space separated string of the form "Sender Receiver Amount"
@@ -58,10 +74,17 @@ defmodule Proj4 do
   def handle_cast({:make_transaction, ip_string, transaction_ips}, current_map) do
 
     # Split the input string
-    # h1 h2 100
+    # h1 h2 100.0
     [sender, receiver, amount] = String.split(ip_string)
 
-    are_inputs_valid?(sender, amount, current_map.chain, transaction_ips)
+    # 1. Check if inputs are valid
+    # 2. Find the change address
+    # 3. Add this change address to the transaction
+    # 4. Find overall hash of the transaction (For all individual parts)
+    # 5. Send to {:add_transaction}
+
+    {are_inputs_valid?, balance} =
+     are_inputs_valid_and_difference(sender, amount, current_map.chain, transaction_ips)
 
     # # Make transaction
     transaction = 
@@ -71,8 +94,8 @@ defmodule Proj4 do
 
         :out => [
           %{
-          :sender => String.to_atom(sender),
-          :receiver => String.to_atom(receiver),
+          :sender => sender,
+          :receiver => receiver,
           :amount => String.to_float(amount),
           :n => 0,
           }
@@ -80,8 +103,14 @@ defmodule Proj4 do
 
         :txid => :crypto.hash(:sha, sender <> receiver <> amount) |> Base.encode16(),
       }
+
+    # Add change address to transaction
+    transaction =
+      add_change_address_to_transaction(transaction, balance, sender)
     
-    # IO.inspect transaction
+    find_overall_hash_of_transaction()
+
+    IO.inspect transaction
     
     GenServer.cast(self(), {:add_transaction, transaction})
 
@@ -345,7 +374,7 @@ defmodule Proj4 do
         :out => [
           %{
           :sender => "coinbase",
-          :receiver =>  public_key,
+          :receiver =>  Atom.to_string(public_key),
           :amount => 25.0,
           :n => 0,
           }
@@ -398,6 +427,54 @@ defmodule Proj4 do
     Map.get_and_update(current_map, :uncommitted_transactions, fn x -> {x, new_uncommitted} end)
   end
 
+  # Add change address to the transaction output with given balance
+  # Assign index to the change address
+  # balance is float
+  # sender is string
+  defp add_change_address_to_transaction(transaction, balance, sender) do
+
+    # TODO: Implement this
+
+    # Format for transaction is as follows
+    # transaction = 
+    #   %{
+    #     # Format for :in => [%{:hash, :n}, ...]
+    #     :in => transaction_ips,
+
+    #     :out => [
+    #       %{
+    #       :sender => sender,
+    #       :receiver => receiver,
+    #       :amount => String.to_float(amount),
+    #       :n => 0,
+    #       }
+    #     ],
+
+    #     :txid => :crypto.hash(:sha, sender <> receiver <> amount) |> Base.encode16(),
+    #   }
+
+    ip_out = transaction.out
+    n_to_assign = length(ip_out)
+
+    change_address = 
+      %{
+        :sender => sender,
+        :receiver => sender,
+        :amount => balance,
+        :n => n_to_assign,
+      }
+
+      ip_out = [change_address | ip_out]
+    {_, transaction} = 
+      Map.get_and_update(transaction, :out, fn x -> {x, ip_out} end)
+    
+    transaction
+  end
+
+  defp find_overall_hash_of_transaction() do
+    # TODO: Implement this
+  end
+
   # CAST EXAMPLE 
   # def handle_cast({:print_state}, current_map) do
   #   IO.inspect(current_map)
@@ -424,4 +501,4 @@ defmodule Proj4 do
   # end
 end
 
-# GenServer.cast(:B1D5781111D84F7B3FE45A0852E59758CD7A87E5, {:make_transaction,":B1D5781111D84F7B3FE45A0852E59758CD7A87E5 :AC3478D69A3C81FA62E60F5C3696165A4E5E6AC4 10.0"  , [ %{ :hash => "567E353A9DF286023A5214C5A2B7B5C70B971C64", :n => 0 }]})
+# GenServer.cast(:B1D5781111D84F7B3FE45A0852E59758CD7A87E5, {:make_transaction,"B1D5781111D84F7B3FE45A0852E59758CD7A87E5 AC3478D69A3C81FA62E60F5C3696165A4E5E6AC4 10.0"  , [ %{ :hash => "567E353A9DF286023A5214C5A2B7B5C70B971C64", :n => 0 }]})

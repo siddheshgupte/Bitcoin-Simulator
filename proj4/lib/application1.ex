@@ -5,7 +5,6 @@ defmodule Application1 do
 
     list_of_public_keys = 
       1..num_of_nodes
-      # |> Enum.to_list()
       |> Enum.map(fn x ->
         identifier = :crypto.hash(:sha, Integer.to_string(x)) |> Base.encode16()
       end)
@@ -13,12 +12,13 @@ defmodule Application1 do
     genesis_block = start_blockchain(list_of_public_keys)
 
     children =
+      # list_of_public keys has strings
       list_of_public_keys
-      |> Enum.to_list()
-      |> Enum.map(fn identifier ->
+      # |> Enum.to_list()
+      |> Enum.map(fn str_identifier ->
         Supervisor.child_spec(
-          {Proj4, [String.to_atom("#{identifier}"), genesis_block]},
-          id: String.to_atom("#{identifier}")
+          {Proj4, [String.to_atom(str_identifier), genesis_block]},
+          id: String.to_atom(str_identifier)
         )
       end)
 
@@ -26,6 +26,7 @@ defmodule Application1 do
     {:ok, supervisor} = Supervisor.start_link(children, opts)
 
     # Get list of all children of the supervisor
+    # lst_of_nodes has atoms
     lst_of_nodes =
       Supervisor.which_children(supervisor)
       |> IO.inspect()
@@ -37,6 +38,7 @@ defmodule Application1 do
     end)
   end
 
+  # Make coin base with string identifier
   def make_coinbase(key) do
     transaction = 
       %{
@@ -56,7 +58,7 @@ defmodule Application1 do
           :n => 0,
           }
         ],
-        :txid => :crypto.hash(:sha, "coinbase" <> Atom.to_string(key) <> "25.0") |> Base.encode16(),
+        :txid => :crypto.hash(:sha, "coinbase" <> key <> "25.0") |> Base.encode16(),
       }
   end
 
@@ -66,7 +68,7 @@ defmodule Application1 do
 
     txs =
       list_of_public_keys
-        |> Enum.map(fn x -> make_coinbase(String.to_atom("#{x}")) end)
+        |> Enum.map(fn x -> make_coinbase(x) end)
 
     [
       %{
