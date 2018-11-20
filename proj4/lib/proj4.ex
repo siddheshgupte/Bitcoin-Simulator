@@ -20,32 +20,36 @@ defmodule Proj4 do
     {:ok, initial_map}
   end
 
-  # Return a list of maps of form %{:in => txid, :n => index}
-  defp find_inputs(sender, amount, chain, transaction_ips) do
+  # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
+  defp are_inputs_valid?(sender, amount, chain, transaction_ips) do
+    IO.inspect amount
+
     # VERIFY INPUTS
     # 1. Check if the sender was the receiver in those transactions
     # 2. Check if sum of all those amounts >= amount
-
-    # TODO
 
     # List of txids from transaction_ips that we have to find
     txids_to_find = 
       transaction_ips
         |> Enum.map(fn x -> x.hash end)
+        # |> IO.inspect 
 
-    txs =
-      chain
-        |> Enum.map(fn x ->
-           x.tx |> Enum.filter(fn y -> if y.txid in txids_to_find, do: y, else: nil end)
-          end)
-        |> Enum.filter(fn x -> x != nil end)
+    ele_in_txids_to_find? = &(&1 in txids_to_find)
+    receiver_matching? = &(Atom.to_string(&1) == String.slice(sender, 1..-1))
 
-    
-    # transaction_ips
-    #   |> Enum.map(fn x -> Enum.filter(txs, fn y -> y.out.n == x.n end) end)
-    #   |> Enum.filter(fn x -> x.receiver == sender end)
-    #   |> IO.inspect
+    amounts_to_sender_in_ip_transactions =
+      for block <- chain,
+        tx_in_block <- block.tx, ele_in_txids_to_find?.(tx_in_block.txid),
+          tx_out <- tx_in_block.out, receiver_matching?.(tx_out.receiver),
+            ip_to_find <- transaction_ips, ele_in_txids_to_find?.(ip_to_find.hash)
+          do
+            if tx_out.n == ip_to_find.n do
+              tx_out.amount
+            end
+          end
 
+      IO.inspect Enum.sum(amounts_to_sender_in_ip_transactions)
+      IO.inspect Enum.sum(amounts_to_sender_in_ip_transactions) >= String.to_float(amount)
   end
 
   # Take input as a space separated string of the form "Sender Receiver Amount"
@@ -57,7 +61,7 @@ defmodule Proj4 do
     # h1 h2 100
     [sender, receiver, amount] = String.split(ip_string)
 
-    find_inputs(sender, 100, current_map.chain, transaction_ips)
+    are_inputs_valid?(sender, amount, current_map.chain, transaction_ips)
 
     # # Make transaction
     transaction = 
@@ -77,7 +81,7 @@ defmodule Proj4 do
         :txid => :crypto.hash(:sha, sender <> receiver <> amount) |> Base.encode16(),
       }
     
-    IO.inspect transaction
+    # IO.inspect transaction
     
     GenServer.cast(self(), {:add_transaction, transaction})
 

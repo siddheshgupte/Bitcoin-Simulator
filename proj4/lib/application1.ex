@@ -56,7 +56,7 @@ defmodule Application1 do
           :n => 0,
           }
         ],
-        :txid => :crypto.hash(:sha, "coinbase" <> key <> "25.0") |> Base.encode16(),
+        :txid => :crypto.hash(:sha, "coinbase" <> Atom.to_string(key) <> "25.0") |> Base.encode16(),
       }
   end
 
@@ -66,7 +66,7 @@ defmodule Application1 do
 
     txs =
       list_of_public_keys
-        |> Enum.map(fn x -> make_coinbase(x) end)
+        |> Enum.map(fn x -> make_coinbase(String.to_atom("#{x}")) end)
 
     [
       %{
