@@ -37,7 +37,6 @@ defmodule Proj4 do
 
     # Anonymous functions for filtering in the comprehensions
     ele_in_txids_to_find? = &(&1 in txids_to_find)
-    # receiver_matching? = &(Atom.to_string(&1) == String.slice(sender, 1..-1))
     receiver_matching? = &(&1 == sender)
 
     # List of amounts in the referenced transactions
@@ -53,8 +52,6 @@ defmodule Proj4 do
               tx_out.amount
             end
           end
-
-      # IO.inspect Enum.sum(amounts_to_sender_in_ip_transactions)
       
       # Sum all the amounts in referenced transaction and compare to amount being sent.
       are_inputs_valid? = Enum.sum(amounts_to_sender_in_ip_transactions) >= String.to_float(amount)
@@ -68,7 +65,7 @@ defmodule Proj4 do
 
   # Take input as a space separated string of the form "Sender Receiver Amount"
   # Transaction_ips is a list of transactions to use as input for this transaction
-  # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
+  # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}, ...]
   def handle_cast({:make_transaction, ip_string, transaction_ips}, current_map) do
 
     # Split the input string
@@ -82,7 +79,7 @@ defmodule Proj4 do
     # 5. Send to {:add_transaction}
 
     {are_inputs_valid?, balance} =
-     are_inputs_valid_and_difference(sender, amount, current_map.chain, transaction_ips)
+      are_inputs_valid_and_difference(sender, amount, current_map.chain, transaction_ips)
 
     # # Make transaction
     transaction = 
@@ -108,8 +105,9 @@ defmodule Proj4 do
         # Add change address to transaction
         |> add_change_address_to_transaction(balance, sender)
         # Set overall hash of the transaction
-        |>find_and_set_overall_hash_of_transaction()
+        |> find_and_set_overall_hash_of_transaction()
           
+    # Send to {:add_transaction} which will then gossip to other nodes
     GenServer.cast(self(), {:add_transaction, transaction})
 
     {:noreply, current_map}
@@ -222,9 +220,18 @@ defmodule Proj4 do
 
   # Gossip transaction. Can combine with {:add_transaction} in the end if necessary
   def handle_cast({:gossip_transaction, transaction}, current_map) do
+    
+    # Don't propagate if
+    # 1. This transaction already exists in uncommitted
+    # 2. Transaction isn't valid for it's hash
+    # 3. Inputs of the transaction aren't valid
+    # 4. Is a double spend wrt already seen transactions - take the input and check uncommitted + all blockchain transactions inputs 
+
+
     {should_propagate, current_map} =
-      if not Enum.member?(current_map.uncommitted_transactions, transaction) do
-        check_if_transaction_valid(transaction)
+      if not Enum.member?(current_map.uncommitted_transactions, transaction)
+       and check_if_transaction_valid(transaction) and inputs_of_transaction_valid?(transaction, current_map) do
+        
         check_if_double_spend()
 
         # Add to uncommitted transactions
@@ -257,7 +264,7 @@ defmodule Proj4 do
     is_new_block = not Enum.member?(current_map.chain, block)
 
     builds_on_curr_longest =
-      if Enum.at(current_map.chain, 0).index + 1 == block.index, do: true, else: false
+      Enum.at(current_map.chain, 0).index + 1 == block.index
 
     {should_propagate, current_map} =
     
@@ -328,11 +335,7 @@ defmodule Proj4 do
 
   defp verify_block_hash(block) do
     # Check if incoming block is valid
-    if get_hash(block.index, block.prev_hash, block.time, block.mrkl_root, block.nonce) == block.hash do
-      true
-    else
-      false
-    end
+    get_hash(block.index, block.prev_hash, block.time, block.mrkl_root, block.nonce) == block.hash
   end
 
   # Verify if blockchain is valid
@@ -405,11 +408,36 @@ defmodule Proj4 do
     {hashed.value, hashed}
   end
 
-  defp check_if_transaction_valid(transaction_map) do
-    # TODO: Implement this
-    # :crypto.hash(:sha, transaction_map.sender <> transaction_map.receiver <> Float.to_string(transaction_map.amount))
-    #  |> Base.encode16() == transaction_map.txid
-    true 
+  # Finds the combined hash for all the transactions in a transaction
+  defp get_hash_for_transaction(transaction) do
+
+    # Collect all senders in a list
+    senders =
+    for tx <- transaction.out,
+      do: tx.sender
+    
+    # Collect all receivers in a list
+    receivers =
+    for tx <- transaction.out,
+      do: tx.receiver
+   
+    # Collect all amounts in a list
+    amounts =
+    for tx <- transaction.out,
+      do: tx.amount
+    
+    # Sort each and combine into one string each 
+    senders = senders |> Enum.sort() |> Enum.join("")
+    receivers = receivers |> Enum.sort() |> Enum.join("")
+    amounts = amounts |> Enum.sort() |> Enum.join("")
+    
+    # return calculated hash
+    txid_calculated = :crypto.hash(:sha, senders <> receivers <> amounts) |> Base.encode16() 
+  end
+
+  defp check_if_transaction_valid(transaction) do
+    txid_calculated = get_hash_for_transaction(transaction)
+    txid_calculated == transaction.txid 
   end
 
   defp check_if_double_spend() do
@@ -477,7 +505,6 @@ defmodule Proj4 do
   end
 
   defp find_and_set_overall_hash_of_transaction(transaction) do
-    # TODO: Implement this
 
     # transaction format is
     # %{
@@ -503,34 +530,35 @@ defmodule Proj4 do
     #   for tx <- transaction.out,
     #     do: {tx.receiver, tx.sender, tx.amount}
     
-    
-    senders =
-    for tx <- transaction.out,
-      do: tx.sender
-    
-    receivers =
-    for tx <- transaction.out,
-      do: tx.receiver
-   
-    amounts =
-    for tx <- transaction.out,
-      do: tx.amount
-    
-    senders = Enum.sort(senders)
-    receivers = Enum.sort(receivers)
-    amounts = Enum.sort(amounts)
-    
-    senders = Enum.join(senders, "")
-    receivers = Enum.join(receivers, "")
-    amounts = Enum.join(amounts, "")
   
-    txid_to_set = :crypto.hash(:sha, senders <> receivers <> amounts) |> Base.encode16()
+    txid_to_set = get_hash_for_transaction(transaction)
 
     {_, transaction} =
       Map.get_and_update(transaction, :txid, fn x -> {x, txid_to_set} end)
     
     # Return updated map with the new hash
     transaction
+  end
+
+  # Check if inputs of the transaction are valid
+  # This checks it for all the transactions in the transaction.out
+  # i.e calls are_inputs_valid_and_difference() for all transactions in transaction.out
+  defp inputs_of_transaction_valid?(transaction, current_map) do
+    # Anonymous function for filtering out change addresses
+    sender_not_eq_receiver? = fn x -> x.sender != x.receiver end
+
+    # Collect results of are_inputs_valid_and_difference for all txs in tx_out.
+    # results is of the format [{true, 10.0}, ...]
+    results =
+      for tx_out <- transaction.out, sender_not_eq_receiver?.(tx_out),
+        do: are_inputs_valid_and_difference(tx_out.sender, Float.to_string(tx_out.amount), current_map.chain, transaction.in)
+
+    # Check the collected results for a non valid transaction i.e check for {false, amount}
+    non_valid_inputs = 
+      for {false, n} <- results, do: n 
+    
+    # If there are no invalid inputs, then return true
+    length(non_valid_inputs) == 0     
   end
 
   # CAST EXAMPLE 
