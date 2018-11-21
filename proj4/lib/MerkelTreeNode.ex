@@ -18,7 +18,8 @@ defmodule MerkleTreeNode do
   """
  ## @spec new(blocks) :: root
   def build(blocks) do
-
+    
+    # getting transactions from 
     list_of_list = Enum.map(blocks, fn(block) ->
       transaction_list = block.out
       [] ++ temp = Enum.map(transaction_list, fn(transaction)->
@@ -31,9 +32,7 @@ defmodule MerkleTreeNode do
 
     IO.inspect(flat_list)
     leaves = Enum.map(flat_list, fn(transaction) ->
-     
-
-      ip= Atom.to_string(transaction.sender) <> Atom.to_string(transaction.receiver) <> Float.to_string(transaction.amount)
+      ip= transaction.sender <> transaction.receiver <> Float.to_string(transaction.amount)
       %MerkleTreeNode{
         value: :crypto.hash(:sha,ip) |> Base.encode16(),
         children: [],

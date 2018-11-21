@@ -359,6 +359,10 @@ defmodule Proj4 do
     length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0
   end
 
+  defp verify_merkleTree() do
+    
+  end
+
   defp add_coinbase_transaction(public_key, curr_tx) do
 
     coinbase = 
