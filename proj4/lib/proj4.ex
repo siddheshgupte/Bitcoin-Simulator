@@ -1,6 +1,10 @@
 defmodule Proj4 do
   use GenServer, restart: :temporary
 
+  @type tx_in_t :: %{hash: String.t, n: integer, optional(any) => any}
+  @type tx_out_t :: %{sender : String.t, receiver: String.t, amount: float, n: integer, optional(any) => any}  
+  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t, optional(any) => any}
+ 
   # External API
   def start_link([input_name, genesis_block]) do
     GenServer.start_link(
@@ -21,9 +25,9 @@ defmodule Proj4 do
   end
 
   # Returns a tuple {are_inputs_valid?, balance}
-  # are_inputs_valid? is a boolean 
-  # balance is a float (amounts in referred transactions - amount to send)
+  # balance is (amounts in referred transactions - amount to send)
   # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
+  @spec are_inputs_valid_and_difference(String.t, String.t, list, tx_in_t) :: {boolean, float} 
   defp are_inputs_valid_and_difference(sender, amount, chain, transaction_ips) do
 
     # VERIFY INPUTS
@@ -464,8 +468,7 @@ defmodule Proj4 do
 
   # Add change address to the transaction output with given balance
   # Assign index to the change address
-  # balance is float
-  # sender is string
+  @spec add_change_address_to_transaction(tx_t, float, String.t) :: map
   defp add_change_address_to_transaction(transaction, balance, sender) do
 
     # Format for transaction is as follows
@@ -504,6 +507,7 @@ defmodule Proj4 do
     transaction
   end
 
+  @spec find_and_set_overall_hash_of_transaction(tx_t)
   defp find_and_set_overall_hash_of_transaction(transaction) do
 
     # transaction format is
@@ -543,6 +547,7 @@ defmodule Proj4 do
   # Check if inputs of the transaction are valid
   # This checks it for all the transactions in the transaction.out
   # i.e calls are_inputs_valid_and_difference() for all transactions in transaction.out
+  @spec inputs_of_transaction_valid?(tx_t, map) :: boolean 
   defp inputs_of_transaction_valid?(transaction, current_map) do
     # Anonymous function for filtering out change addresses
     sender_not_eq_receiver? = fn x -> x.sender != x.receiver end

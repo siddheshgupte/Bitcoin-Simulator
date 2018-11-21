@@ -38,6 +38,7 @@ defmodule Application1 do
   end
 
   # Make coin base with string identifier
+  @spec make_coinbase(String.t) :: map
   def make_coinbase(key) do
     transaction = %{
       :in => [
