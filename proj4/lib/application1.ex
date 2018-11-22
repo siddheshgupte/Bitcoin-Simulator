@@ -5,7 +5,7 @@ defmodule Application1 do
     list_of_public_keys =
       1..num_of_nodes
       |> Enum.map(fn x ->
-        identifier = :crypto.hash(:sha, Integer.to_string(x)) |> Base.encode16()
+        :crypto.hash(:sha, Integer.to_string(x)) |> Base.encode16()
       end)
 
     genesis_block = start_blockchain(list_of_public_keys)
@@ -40,9 +40,9 @@ defmodule Application1 do
   end
 
   # Make coin base with string identifier
-  @spec make_coinbase(String.t) :: map
+  @spec make_coinbase(String.t()) :: map
   def make_coinbase(key) do
-    transaction = %{
+    %{
       :in => [
         %{
           # previous txid that we are claiming
@@ -95,20 +95,20 @@ defmodule Application1 do
     hex_hash = get_hash(index, prev_hash, time, mrkl_root, nonce)
 
     # Check if first digit is zero 
-    {nonce, hex_hash} =
-      if String.slice(hex_hash, 0, 1) == "0" do
-        {nonce, hex_hash}
-      else
-        find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce + 1)
-      end
+    if String.slice(hex_hash, 0, 1) == "0" do
+      {nonce, hex_hash}
+    else
+      find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce + 1)
+    end
   end
 
   # Return hexadecimal hash
+  @spec get_hash(integer, String.t, integer, String.t, integer) :: String.t
   def get_hash(index, prev_hash, time, mrkl_root, nonce) do
     ip =
       Integer.to_string(index) <>
         prev_hash <> Integer.to_string(time) <> mrkl_root <> Integer.to_string(nonce)
 
-    hex_hash = :crypto.hash(:sha, ip) |> Base.encode16()
+    :crypto.hash(:sha, ip) |> Base.encode16()
   end
 end
