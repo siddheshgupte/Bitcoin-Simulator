@@ -46,7 +46,7 @@ defmodule Application1 do
       :in => [
         %{
           # previous txid that we are claiming
-          :hash => 000_000_000,
+          :hash => "000000000",
           # Index of transaction in the block
           :n => 0
         }

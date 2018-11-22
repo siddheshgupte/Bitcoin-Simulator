@@ -93,10 +93,10 @@ defmodule Proj4 do
   @spec handle_cast({:add_transaction, tx_t}, map) :: {:noreply, map}
   def handle_cast({:add_transaction, transaction}, current_map) do
     # Check if transaction is valid
-    if check_if_transaction_valid(transaction) do
+    if check_if_transaction_valid(transaction)
+    and is_not_double_spend?(transaction, current_map.uncommitted_transactions, current_map.chain) do
       check_signature()
-      check_if_double_spend()
-
+      
       # Add to local uncommitted transactions
       {_, current_map} =
         Map.get_and_update(current_map, :uncommitted_transactions, fn x ->
@@ -204,8 +204,8 @@ defmodule Proj4 do
     {should_propagate, current_map} =
       if not Enum.member?(current_map.uncommitted_transactions, transaction) and
            check_if_transaction_valid(transaction) and
-           inputs_of_transaction_valid?(transaction, current_map) do
-        check_if_double_spend()
+           inputs_of_transaction_valid?(transaction, current_map) and
+           is_not_double_spend?(transaction, current_map.uncommitted_transactions, current_map.chain) do
 
         # Add to uncommitted transactions
         {_, map_to_return} =
@@ -242,6 +242,8 @@ defmodule Proj4 do
     # 1. Store forks
     # 2. Choose the higher nonce one for mining next
     # 3. after 6 deep, discard fork
+
+    # VERIFY BLOCK
     # 1. Is this a new block?
     # 2. Is the block valid?
     # 3. Are all the transactions in this block valid? (Check double spends also here)
@@ -373,7 +375,7 @@ defmodule Proj4 do
         x.hash != get_hash(x.index, x.prev_hash, x.time, x.mrkl_root, x.nonce)
       end)
 
-    length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0
+    IO.inspect length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0
   end
 
   @spec add_coinbase_transaction(atom, [tx_t]) :: [tx_t]
@@ -457,8 +459,39 @@ defmodule Proj4 do
     txid_calculated == transaction.txid
   end
 
-  defp check_if_double_spend() do
-    # TODO: Implement this
+  @spec is_not_double_spend?(tx_t, [tx_t], [block_t]) :: boolean
+  defp is_not_double_spend?(transaction, uncommitted_transactions, chain) do
+
+    # 1. Check in uncommitted transactions if the input is equal to the inputs given here
+    # 2. Check all blocks' transactions inputs to check if input is equal to the inputs given here 
+
+    results = 
+    for uc_tx <- uncommitted_transactions,
+      input <- uc_tx.in
+      do
+        input in transaction.in 
+      end
+
+    uncommitted_not_double_spent = Enum.filter(results, fn x -> x != false end) |> length() == 0
+    
+    chain_not_double_spent = 
+      if uncommitted_not_double_spent do
+
+        results = 
+          for block <- chain,
+            tx <- block.tx,
+              input <- tx.in
+              do
+                input in transaction.in
+              end
+        
+        Enum.filter(results, fn x -> x != false end) |> length() == 0
+      else
+        # false
+        uncommitted_not_double_spent
+      end
+    
+    uncommitted_not_double_spent and chain_not_double_spent
   end
 
   @spec check_if_all_transactions_valid(block_t) :: boolean
@@ -511,25 +544,6 @@ defmodule Proj4 do
 
   @spec find_and_set_overall_hash_of_transaction(tx_t) :: tx_t
   defp find_and_set_overall_hash_of_transaction(transaction) do
-    # transaction format is
-    # %{
-    #   in: [%{hash: "567E353A9DF286023A5214C5A2B7B5C70B971C64", n: 0}],
-    #   out: [
-    #     %{
-    #       amount: 15.0,
-    #       n: 1,
-    #       receiver: "B1D5781111D84F7B3FE45A0852E59758CD7A87E5",
-    #       sender: "B1D5781111D84F7B3FE45A0852E59758CD7A87E5"
-    #     },
-    #     %{
-    #       amount: 10.0,
-    #       n: 0,
-    #       receiver: "AC3478D69A3C81FA62E60F5C3696165A4E5E6AC4",
-    #       sender: "B1D5781111D84F7B3FE45A0852E59758CD7A87E5"
-    #     }
-    #   ],
-    #   txid: "4FAAE7EB28C9A0D2D4CE6A4342E66D1A7AA31DEA"
-    # }
 
     txid_to_set = get_hash_for_transaction(transaction)
 
