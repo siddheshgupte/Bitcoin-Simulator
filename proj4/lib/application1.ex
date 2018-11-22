@@ -2,8 +2,7 @@ defmodule Application1 do
   use Application
 
   def start(_type, num_of_nodes) do
-
-    list_of_public_keys = 
+    list_of_public_keys =
       1..num_of_nodes
       |> Enum.map(fn x ->
         identifier = :crypto.hash(:sha, Integer.to_string(x)) |> Base.encode16()
@@ -11,8 +10,8 @@ defmodule Application1 do
 
     genesis_block = start_blockchain(list_of_public_keys)
 
+    # list_of_public keys has strings
     children =
-      # list_of_public keys has strings
       list_of_public_keys
       # |> Enum.to_list()
       |> Enum.map(fn str_identifier ->
@@ -39,27 +38,27 @@ defmodule Application1 do
   end
 
   # Make coin base with string identifier
+  @spec make_coinbase(String.t) :: map
   def make_coinbase(key) do
-    transaction = 
-      %{
-        :in => [
-          %{
-            # previous txid that we are claiming
-            :hash => 000000000  ,
-            # Index of transaction in the block
-            :n => 0,
-          }
-        ],
-        :out => [
-          %{
+    transaction = %{
+      :in => [
+        %{
+          # previous txid that we are claiming
+          :hash => 000_000_000,
+          # Index of transaction in the block
+          :n => 0
+        }
+      ],
+      :out => [
+        %{
           :sender => "coinbase",
           :receiver => key,
           :amount => 25.0,
-          :n => 0,
-          }
-        ],
-        :txid => :crypto.hash(:sha, "coinbase" <> key <> "25.0") |> Base.encode16(),
-      }
+          :n => 0
+        }
+      ],
+      :txid => :crypto.hash(:sha, "coinbase" <> key <> "25.0") |> Base.encode16()
+    }
   end
 
   def start_blockchain(list_of_public_keys) do
@@ -68,7 +67,7 @@ defmodule Application1 do
 
     txs =
       list_of_public_keys
-        |> Enum.map(fn x -> make_coinbase(x) end)
+      |> Enum.map(fn x -> make_coinbase(x) end)
 
     [
       %{
