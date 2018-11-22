@@ -35,6 +35,8 @@ defmodule Application1 do
     Enum.each(lst_of_nodes, fn x ->
       GenServer.cast(x, {:set_neighbours, List.delete(lst_of_nodes, x)})
     end)
+
+    {:ok, self()}
   end
 
   # Make coin base with string identifier

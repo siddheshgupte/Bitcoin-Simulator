@@ -1,10 +1,12 @@
 defmodule Proj4 do
   use GenServer, restart: :temporary
 
-  @type tx_in_t :: %{hash: String.t, n: integer, optional(any) => any}
-  @type tx_out_t :: %{sender : String.t, receiver: String.t, amount: float, n: integer, optional(any) => any}  
-  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t, optional(any) => any}
- 
+  @type tx_in_t :: %{hash: String.t, n: integer}
+  @type tx_out_t :: %{sender: String.t, receiver: String.t, amount: float, n: integer}  
+  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t}
+  @type block_t :: %{index: integer, hash: String.t, prev_hash: String.t, time: integer, nonce: integer, mrkl_root: String.t,
+  n_tx: integer, tx: [tx_t], mrkl_tree: any, difficulty: integer}
+
   # External API
   def start_link([input_name, genesis_block]) do
     GenServer.start_link(
@@ -24,52 +26,10 @@ defmodule Proj4 do
     {:ok, initial_map}
   end
 
-  # Returns a tuple {are_inputs_valid?, balance}
-  # balance is (amounts in referred transactions - amount to send)
-  # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
-  @spec are_inputs_valid_and_difference(String.t, String.t, list, tx_in_t) :: {boolean, float} 
-  defp are_inputs_valid_and_difference(sender, amount, chain, transaction_ips) do
-
-    # VERIFY INPUTS
-    # 1. Check if the sender was the receiver in those transactions
-    # 2. Check if sum of all those amounts >= amount
-
-    # List of txids from transaction_ips that we have to find
-    txids_to_find = 
-      transaction_ips
-        |> Enum.map(fn x -> x.hash end)
-
-    # Anonymous functions for filtering in the comprehensions
-    ele_in_txids_to_find? = &(&1 in txids_to_find)
-    receiver_matching? = &(&1 == sender)
-
-    # List of amounts in the referenced transactions
-    amounts_to_sender_in_ip_transactions =
-      for block <- chain,
-        tx_in_block <- block.tx, ele_in_txids_to_find?.(tx_in_block.txid),
-          tx_out <- tx_in_block.out, receiver_matching?.(tx_out.receiver),
-            ip_to_find <- transaction_ips, ele_in_txids_to_find?.(ip_to_find.hash)
-          do
-            # Check index
-            if tx_out.n == ip_to_find.n do
-              # return amount in this transaction
-              tx_out.amount
-            end
-          end
-      
-      # Sum all the amounts in referenced transaction and compare to amount being sent.
-      are_inputs_valid? = Enum.sum(amounts_to_sender_in_ip_transactions) >= String.to_float(amount)
-      
-      if are_inputs_valid? do
-        {are_inputs_valid?, Enum.sum(amounts_to_sender_in_ip_transactions) - String.to_float(amount)}
-      else
-        {are_inputs_valid?, 0.0}
-      end
-  end
-
   # Take input as a space separated string of the form "Sender Receiver Amount"
   # Transaction_ips is a list of transactions to use as input for this transaction
   # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}, ...]
+  @spec handle_cast({:make_transaction, String.t, [tx_in_t]}, map) :: {:noreply, map}
   def handle_cast({:make_transaction, ip_string, transaction_ips}, current_map) do
 
     # Split the input string
@@ -110,7 +70,7 @@ defmodule Proj4 do
         |> add_change_address_to_transaction(balance, sender)
         # Set overall hash of the transaction
         |> find_and_set_overall_hash_of_transaction()
-          
+
     # Send to {:add_transaction} which will then gossip to other nodes
     GenServer.cast(self(), {:add_transaction, transaction})
 
@@ -119,6 +79,7 @@ defmodule Proj4 do
 
   # Adds a transaction to the front of the local uncommitted transaction list if valid
   # Also will start the transaction gossip
+  @spec handle_cast({:add_transaction, tx_t}, map) :: {:noreply, map}
   def handle_cast({:add_transaction, transaction}, current_map) do
     # Check if transaction is valid
     if check_if_transaction_valid(transaction) do
@@ -156,7 +117,7 @@ defmodule Proj4 do
       get_list_highest_priority_uncommitted_transactions(current_map.uncommitted_transactions)
 
     # Remove from uncommitted transactions
-    {_, current_map} =
+    current_map =
       remove_transactions_from_uncommitted_transactions(curr_tx, current_map) 
     
     # Make coinbase transaction and add to curr_tx
@@ -215,6 +176,7 @@ defmodule Proj4 do
   # ----------------------------------------------------------------------------------------------
 
   # Append to neighbours list
+  @spec handle_cast({:set_neighbours, [atom]}, map) :: {:noreply, map}
   def handle_cast({:set_neighbours, lst_neighbours}, current_map) do
     {_, current_map} =
       Map.get_and_update(current_map, :neighbours, fn x -> {x, x ++ lst_neighbours} end)
@@ -223,6 +185,7 @@ defmodule Proj4 do
   end
 
   # Gossip transaction. Can combine with {:add_transaction} in the end if necessary
+  @spec handle_cast({:gossip_transaction, tx_t}, map) :: {:noreply, map} 
   def handle_cast({:gossip_transaction, transaction}, current_map) do
     
     # Don't propagate if
@@ -263,6 +226,7 @@ defmodule Proj4 do
   end
 
   # Gossip the block to 8 other neighbours
+  @spec handle_cast({:gossip_block, block_t}, map) :: {:noreply, map}
   def handle_cast({:gossip_block, block}, current_map) do
     
     is_new_block = not Enum.member?(current_map.chain, block)
@@ -291,7 +255,7 @@ defmodule Proj4 do
         end)
         
         # Remove from uncommitted transactions
-        {_, map_to_return} =
+        map_to_return =
           remove_transactions_from_uncommitted_transactions(block.tx, map_to_return)
 
         # {should_propagate, current_map}
@@ -315,7 +279,51 @@ defmodule Proj4 do
   #  PRIVATE UTILITY METHODS
   # ----------------------------------------------------------------------------------------------
 
+  # Returns a tuple {are_inputs_valid?, balance}
+  # balance is (amounts in referred transactions - amount to send)
+  # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
+  @spec are_inputs_valid_and_difference(String.t, String.t, list, [tx_in_t]) :: {boolean, float} 
+  defp are_inputs_valid_and_difference(sender, amount, chain, transaction_ips) do
+
+    # VERIFY INPUTS
+    # 1. Check if the sender was the receiver in those transactions
+    # 2. Check if sum of all those amounts >= amount
+
+    # List of txids from transaction_ips that we have to find
+    txids_to_find = 
+      transaction_ips
+        |> Enum.map(fn x -> x.hash end)
+
+    # Anonymous functions for filtering in the comprehensions
+    ele_in_txids_to_find? = &(&1 in txids_to_find)
+    receiver_matching? = &(&1 == sender)
+
+    # List of amounts in the referenced transactions
+    amounts_to_sender_in_ip_transactions =
+      for block <- chain,
+        tx_in_block <- block.tx, ele_in_txids_to_find?.(tx_in_block.txid),
+          tx_out <- tx_in_block.out, receiver_matching?.(tx_out.receiver),
+            ip_to_find <- transaction_ips, ele_in_txids_to_find?.(ip_to_find.hash)
+          do
+            # Check index
+            if tx_out.n == ip_to_find.n do
+              # return amount in this transaction
+              tx_out.amount
+            end
+          end
+      
+      # Sum all the amounts in referenced transaction and compare to amount being sent.
+      are_inputs_valid? = Enum.sum(amounts_to_sender_in_ip_transactions) >= String.to_float(amount)
+      
+      if are_inputs_valid? do
+        {are_inputs_valid?, Enum.sum(amounts_to_sender_in_ip_transactions) - String.to_float(amount)}
+      else
+        {are_inputs_valid?, 0.0}
+      end
+  end
+
   # Return Nonce and hexadecimal hash
+  @spec find_nonce_and_hash(integer, String.t, integer, String.t, integer) :: {integer, String.t} 
   defp find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce) do
     hex_hash = get_hash(index, prev_hash, time, mrkl_root, nonce)
 
@@ -329,6 +337,7 @@ defmodule Proj4 do
   end
 
   # Return hexadecimal hash
+  @spec get_hash(integer, String.t, integer, String.t, integer) :: String.t
   defp get_hash(index, prev_hash, time, mrkl_root, nonce) do
     ip =
       Integer.to_string(index) <>
@@ -337,12 +346,14 @@ defmodule Proj4 do
     hex_hash = :crypto.hash(:sha, ip) |> Base.encode16()
   end
 
+  @spec verify_block_hash(block_t) :: boolean
   defp verify_block_hash(block) do
     # Check if incoming block is valid
     get_hash(block.index, block.prev_hash, block.time, block.mrkl_root, block.nonce) == block.hash
   end
 
   # Verify if blockchain is valid
+  @spec verify_blockchain([block]) :: boolean 
   defp verify_blockchain(chain) do
     # Verify linked list
     invalid_chain =
@@ -362,6 +373,7 @@ defmodule Proj4 do
     length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0
   end
 
+  @spec add_coinbase_transaction(atom, [tx_t]) :: [tx_t]
   defp add_coinbase_transaction(public_key, curr_tx) do
 
     coinbase = 
@@ -369,7 +381,7 @@ defmodule Proj4 do
         # Format for :in => [%{:hash, :n}, ...]
         :in => [
           %{
-            :hash => 000000000,
+            :hash => "000000000",
             :n => 0,
           }
         ],
@@ -389,6 +401,7 @@ defmodule Proj4 do
     [coinbase | curr_tx]
   end
 
+  @spec get_list_highest_priority_uncommitted_transactions([tx_t]) :: [tx_t] 
   defp get_list_highest_priority_uncommitted_transactions(lst_uncommitted_transactions) do
     # TODO: Return transactions according to the fees here
     lst_uncommitted_transactions
@@ -413,6 +426,7 @@ defmodule Proj4 do
   end
 
   # Finds the combined hash for all the transactions in a transaction
+  @spec get_hash_for_transaction(tx_t) :: String.t 
   defp get_hash_for_transaction(transaction) do
 
     # Collect all senders in a list
@@ -436,9 +450,10 @@ defmodule Proj4 do
     amounts = amounts |> Enum.sort() |> Enum.join("")
     
     # return calculated hash
-    txid_calculated = :crypto.hash(:sha, senders <> receivers <> amounts) |> Base.encode16() 
+    :crypto.hash(:sha, senders <> receivers <> amounts) |> Base.encode16() 
   end
 
+  @spec check_if_transaction_valid(tx_t) :: boolean
   defp check_if_transaction_valid(transaction) do
     txid_calculated = get_hash_for_transaction(transaction)
     txid_calculated == transaction.txid 
@@ -448,46 +463,39 @@ defmodule Proj4 do
     # TODO: Implement this
   end
 
+  @spec check_if_all_transactions_valid(block_t) :: boolean 
   defp check_if_all_transactions_valid(block) do
-    # TODO: Implement this
+    
+    # For each transaction in block call check_if_transaction_valid()
+
+    invalid_transactions =
+      block.tx
+        # Check which elements return false for check_if_transaction_valid 
+        |> Enum.filter(fn tx -> not check_if_transaction_valid(tx) end)
 
     # Return true for now because this is being used in mine method
-    true
-    # Foreach transaction in block call check_if_transaction_valid()
+    length(invalid_transactions) == 0
   end
 
   defp check_signature() do
     # TODO: Implement this
   end
 
+  @spec remove_transactions_from_uncommitted_transactions([tx_t], map) :: map
   defp remove_transactions_from_uncommitted_transactions(tx_to_remove, current_map) do
 
     new_uncommitted = Enum.filter(current_map.uncommitted_transactions, fn x -> x not in tx_to_remove end)
-    Map.get_and_update(current_map, :uncommitted_transactions, fn x -> {x, new_uncommitted} end)
+    
+    {_, map_to_return} =
+      Map.get_and_update(current_map, :uncommitted_transactions, fn x -> {x, new_uncommitted} end)
+    
+    map_to_return
   end
 
   # Add change address to the transaction output with given balance
   # Assign index to the change address
-  @spec add_change_address_to_transaction(tx_t, float, String.t) :: map
+  @spec add_change_address_to_transaction(map, float, String.t) :: tx_t
   defp add_change_address_to_transaction(transaction, balance, sender) do
-
-    # Format for transaction is as follows
-    # transaction = 
-    #   %{
-    #     # Format for :in => [%{:hash, :n}, ...]
-    #     :in => transaction_ips,
-
-    #     :out => [
-    #       %{
-    #       :sender => sender,
-    #       :receiver => receiver,
-    #       :amount => String.to_float(amount),
-    #       :n => 0,
-    #       }
-    #     ],
-
-    #     :txid => :crypto.hash(:sha, sender <> receiver <> amount) |> Base.encode16(),
-    #   }
 
     ip_out = transaction.out
     n_to_assign = length(ip_out)
@@ -507,7 +515,7 @@ defmodule Proj4 do
     transaction
   end
 
-  @spec find_and_set_overall_hash_of_transaction(tx_t)
+  @spec find_and_set_overall_hash_of_transaction(tx_t) :: tx_t
   defp find_and_set_overall_hash_of_transaction(transaction) do
 
     # transaction format is
