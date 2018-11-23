@@ -3,7 +3,7 @@ defmodule Proj4 do
 
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
-  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t()}
+  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t}
   @type block_t :: %{
           index: integer,
           hash: String.t(),
@@ -18,11 +18,12 @@ defmodule Proj4 do
         }
 
   # External API
-  def start_link([input_name, genesis_block]) do
+  def start_link([input_name, private_key, genesis_block]) do
     GenServer.start_link(
       __MODULE__,
       %{
         :public_key => input_name,
+        :private_key => private_key,
         :chain => genesis_block,
         :uncommitted_transactions => [],
         :neighbours => []
@@ -66,7 +67,8 @@ defmodule Proj4 do
           :n => 0
         }
       ],
-      :txid => "Placeholder"
+      :txid => "Placeholder",
+      :signature => "Placeholder",
     }
 
     # Add change address and set overall hash of transaction 
@@ -78,6 +80,9 @@ defmodule Proj4 do
         |> add_change_address_to_transaction(balance, sender)
         # Set overall hash of the transaction
         |> find_and_set_overall_hash_of_transaction()
+        # Set signature
+        # TODO: Change this to private key of the person doing the transaction
+        |> set_signature_of_transaction(current_map.private_key)
       end
 
     # If this is a valid transaction, send to {:add_transaction} which will then gossip to other nodes
@@ -92,15 +97,17 @@ defmodule Proj4 do
   # Also will start the transaction gossip
   @spec handle_cast({:add_transaction, tx_t}, map) :: {:noreply, map}
   def handle_cast({:add_transaction, transaction}, current_map) do
-    # Check if transaction is valid
-    if check_if_transaction_valid(transaction) and
-         is_not_double_spend?(
-           transaction,
-           current_map.uncommitted_transactions,
-           current_map.chain
-         ) do
-      check_signature()
 
+    # 1. Check if transaction's hash is valid
+    # 2. Check if transaction is a double spend
+    # 3. Check the signature of the transaction
+
+    # Check if transaction is valid and not a double spend
+    if check_if_transaction_valid(transaction)
+    and is_not_double_spend?(transaction, current_map.uncommitted_transactions, current_map.chain)
+    and check_signature(transaction, current_map.public_key) do
+      IO.inspect check_signature(transaction, current_map.public_key)
+      
       # Add to local uncommitted transactions
       {_, current_map} =
         Map.get_and_update(current_map, :uncommitted_transactions, fn x ->
@@ -253,7 +260,7 @@ defmodule Proj4 do
     # VERIFY BLOCK
     # 1. Is this a new block?
     # 2. Is the block valid?
-    # 3. Are all the transactions in this block valid? (Check double spends also here)
+    # 3. Are all the transactions in this block valid? (Check double spends also here?)
     # 4. Builds on the current known longest chain? (to avoid forks)
     IO.inspect(block)
 
@@ -514,8 +521,11 @@ defmodule Proj4 do
     length(invalid_transactions) == 0
   end
 
-  defp check_signature() do
-    # TODO: Implement this
+  defp check_signature(transaction, public_key) do
+    {_, signature} = transaction.signature |> Base.decode16
+    {_, public_key} = public_key |> Atom.to_string() |> Base.decode16
+
+    :crypto.verify(:ecdsa, :sha256, transaction.txid, signature, [public_key, :secp256k1])
   end
 
   @spec remove_transactions_from_uncommitted_transactions([tx_t], map) :: map
@@ -587,6 +597,12 @@ defmodule Proj4 do
     length(non_valid_inputs) == 0
   end
 
+  @spec set_signature_of_transaction(tx_t, String.t) :: tx_t 
+  defp set_signature_of_transaction(transaction, private_key) do
+    signature = :crypto.sign(:ecdsa, :sha256, transaction.txid, [private_key, :secp256k1]) |> Base.encode16()
+    {_, transaction} = Map.get_and_update(transaction, :signature, fn x -> {x, signature} end)
+    transaction
+  end
   # CAST EXAMPLE 
   # def handle_cast({:print_state}, current_map) do
   #   IO.inspect(current_map)
@@ -613,5 +629,5 @@ defmodule Proj4 do
   # end
 end
 
-# GenServer.cast(:B1D5781111D84F7B3FE45A0852E59758CD7A87E5, {:make_transaction,"B1D5781111D84F7B3FE45A0852E59758CD7A87E5 AC3478D69A3C81FA62E60F5C3696165A4E5E6AC4 10.0"  , [ %{ :hash => "567E353A9DF286023A5214C5A2B7B5C70B971C64", :n => 0 }]})
-# GenServer.cast(:DA4B9237BACCCDF19C0760CAB7AEC4A8359010B0,{:mine})
+# GenServer.cast(:"0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1", {:make_transaction,"0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0"  , [ %{ :hash => "8A12EB159B4EE7320FE4FF04F6C1088D5A8F078A", :n => 0 }]})
+# GenServer.cast(:"04EFEB65F418AB164360A5C51A6AA3A8B8B56150F21D6067EAA2C1E0F7FFAFCE472ECAEE94F4CFDF6E8EBCADB3A17C4D584EEFF0E076C9333383651EFEC0C29FFA",{:mine})
