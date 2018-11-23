@@ -1,6 +1,9 @@
-defmodule Proj4 do
+defmodule FullNode do
+ @moduledoc """
+    This module implements a full node - i.e node that can mine and holds the entire chain.
+  """
   use GenServer, restart: :temporary
-
+ 
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
   @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t}
