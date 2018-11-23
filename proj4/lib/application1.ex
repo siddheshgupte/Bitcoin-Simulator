@@ -103,7 +103,7 @@ defmodule Application1 do
   end
 
   # Return hexadecimal hash
-  @spec get_hash(integer, String.t, integer, String.t, integer) :: String.t
+  @spec get_hash(integer, String.t(), integer, String.t(), integer) :: String.t()
   def get_hash(index, prev_hash, time, mrkl_root, nonce) do
     ip =
       Integer.to_string(index) <>
