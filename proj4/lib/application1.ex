@@ -2,22 +2,30 @@ defmodule Application1 do
   use Application
 
   def start(_type, num_of_nodes) do
-    list_of_public_keys =
+    
+    list_of_private_keys =
       1..num_of_nodes
       |> Enum.map(fn x ->
         :crypto.hash(:sha, Integer.to_string(x)) |> Base.encode16()
       end)
-
-    genesis_block = start_blockchain(list_of_public_keys)
+    
+    list_of_public_keys =
+      list_of_private_keys
+        |> Enum.map(fn x ->
+           {public_key, _} = :crypto.generate_key(:ecdh, :secp256k1, x)
+            public_key |> Base.encode16()
+          end)
+    
+    genesis_block = start_blockchain(list_of_public_keys, list_of_private_keys)
 
     # list_of_public keys has strings
     children =
-      list_of_public_keys
-      # |> Enum.to_list()
-      |> Enum.map(fn str_identifier ->
+      Enum.zip(list_of_public_keys, list_of_private_keys)
+      |> Enum.map(fn ele ->
+        {public_key, private_key} = ele
         Supervisor.child_spec(
-          {Proj4, [String.to_atom(str_identifier), genesis_block]},
-          id: String.to_atom(str_identifier)
+          {Proj4, [String.to_atom(public_key), private_key, genesis_block]},
+          id: String.to_atom(public_key)
         )
       end)
 
@@ -40,8 +48,8 @@ defmodule Application1 do
   end
 
   # Make coin base with string identifier
-  @spec make_coinbase(String.t()) :: map
-  def make_coinbase(key) do
+  @spec make_coinbase({String.t(), String.t}) :: map
+  def make_coinbase({public_key, private_key}) do
     %{
       :in => [
         %{
@@ -54,21 +62,22 @@ defmodule Application1 do
       :out => [
         %{
           :sender => "coinbase",
-          :receiver => key,
+          :receiver => public_key,
           :amount => 25.0,
           :n => 0
         }
       ],
-      :txid => :crypto.hash(:sha, "coinbase" <> key <> "25.0") |> Base.encode16()
-    }
+      :txid => :crypto.hash(:sha, "coinbase" <> public_key <> "25.0") |> Base.encode16(),
+      :signature => "Placeholder"
+    } |> set_signature_of_transaction(private_key)
   end
 
-  def start_blockchain(list_of_public_keys) do
+  def start_blockchain(list_of_public_keys, list_of_private_keys) do
     {nonce, hex_hash} =
       find_nonce_and_hash(1, "00_000_000_000_000", 1_542_078_479, "FirstBlock", 0)
 
     txs =
-      list_of_public_keys
+      Enum.zip(list_of_public_keys, list_of_private_keys)
       |> Enum.map(fn x -> make_coinbase(x) end)
 
     [
@@ -111,4 +120,11 @@ defmodule Application1 do
 
     :crypto.hash(:sha, ip) |> Base.encode16()
   end
+
+  defp set_signature_of_transaction(transaction, private_key) do
+    signature = :crypto.sign(:ecdsa, :sha256, transaction.txid, [private_key, :secp256k1]) |> Base.encode16()
+    {_, transaction} = Map.get_and_update(transaction, :signature, fn x -> {x, signature} end)
+    transaction
+  end
+
 end
