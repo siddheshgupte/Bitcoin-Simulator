@@ -24,7 +24,7 @@ defmodule Application1 do
       |> Enum.map(fn ele ->
         {public_key, private_key} = ele
         Supervisor.child_spec(
-          {Proj4, [String.to_atom(public_key), private_key, genesis_block]},
+          {FullNode, [String.to_atom(public_key), private_key, genesis_block]},
           id: String.to_atom(public_key)
         )
       end)
