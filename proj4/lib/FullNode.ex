@@ -1,12 +1,12 @@
 defmodule FullNode do
- @moduledoc """
+  @moduledoc """
     This module implements a full node - i.e node that can mine and holds the entire chain.
   """
   use GenServer, restart: :temporary
- 
+
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
-  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t}
+  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t()}
   @type block_t :: %{
           index: integer,
           hash: String.t(),
@@ -71,7 +71,7 @@ defmodule FullNode do
         }
       ],
       :txid => "Placeholder",
-      :signature => "Placeholder",
+      :signature => "Placeholder"
     }
 
     # Add change address and set overall hash of transaction 
@@ -100,17 +100,19 @@ defmodule FullNode do
   # Also will start the transaction gossip
   @spec handle_cast({:add_transaction, tx_t}, map) :: {:noreply, map}
   def handle_cast({:add_transaction, transaction}, current_map) do
-
     # 1. Check if transaction's hash is valid
     # 2. Check if transaction is a double spend
     # 3. Check the signature of the transaction
 
     # Check if transaction is valid and not a double spend
-    if check_if_transaction_valid(transaction)
-    and is_not_double_spend?(transaction, current_map.uncommitted_transactions, current_map.chain)
-    and check_signature(transaction, current_map.public_key) do
-      IO.inspect check_signature(transaction, current_map.public_key)
-      
+    if check_if_transaction_valid(transaction) and
+         is_not_double_spend?(
+           transaction,
+           current_map.uncommitted_transactions,
+           current_map.chain
+         ) and check_signature(transaction, current_map.public_key) do
+      IO.inspect(check_signature(transaction, current_map.public_key))
+
       # Add to local uncommitted transactions
       {_, current_map} =
         Map.get_and_update(current_map, :uncommitted_transactions, fn x ->
@@ -219,8 +221,11 @@ defmodule FullNode do
       if not Enum.member?(current_map.uncommitted_transactions, transaction) and
            check_if_transaction_valid(transaction) and
            inputs_of_transaction_valid?(transaction, current_map) and
-           is_not_double_spend?(transaction, current_map.uncommitted_transactions, current_map.chain) do
-
+           is_not_double_spend?(
+             transaction,
+             current_map.uncommitted_transactions,
+             current_map.chain
+           ) do
         # Add to uncommitted transactions
         {_, map_to_return} =
           Map.get_and_update(current_map, :uncommitted_transactions, fn x ->
@@ -289,6 +294,23 @@ defmodule FullNode do
     end
 
     {:noreply, current_map}
+  end
+
+  def handle_call({:get_required_blocks, transaction_ips}, _from, current_map) do
+    txids_to_find =
+      transaction_ips
+      |> Enum.map(fn x -> x.hash end)
+
+    required_blocks = 
+      for block <- current_map.chain,
+        tx <- block.tx do
+          if tx.txid in txids_to_find do
+            block
+          end
+        end
+
+    required_blocks = Enum.filter(required_blocks, &(&1 != nil))
+  {:reply, required_blocks, current_map}
   end
 
   # ----------------------------------------------------------------------------------------------
@@ -389,7 +411,7 @@ defmodule FullNode do
         x.hash != get_hash(x.index, x.prev_hash, x.time, x.mrkl_root, x.nonce)
       end)
 
-    IO.inspect length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0
+    IO.inspect(length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0)
   end
 
   @spec add_coinbase_transaction(atom, [tx_t]) :: [tx_t]
@@ -475,36 +497,32 @@ defmodule FullNode do
 
   @spec is_not_double_spend?(tx_t, [tx_t], [block_t]) :: boolean
   defp is_not_double_spend?(transaction, uncommitted_transactions, chain) do
-
     # 1. Check in uncommitted transactions if the input is equal to the inputs given here
     # 2. Check all blocks' transactions inputs to check if input is equal to the inputs given here 
 
-    results = 
-    for uc_tx <- uncommitted_transactions,
-      input <- uc_tx.in
-      do
-        input in transaction.in 
+    results =
+      for uc_tx <- uncommitted_transactions,
+          input <- uc_tx.in do
+        input in transaction.in
       end
 
     uncommitted_not_double_spent = Enum.filter(results, fn x -> x != false end) |> length() == 0
-    
-    chain_not_double_spent = 
-      if uncommitted_not_double_spent do
 
-        results = 
+    chain_not_double_spent =
+      if uncommitted_not_double_spent do
+        results =
           for block <- chain,
-            tx <- block.tx,
-              input <- tx.in
-              do
-                input in transaction.in
-              end
-        
+              tx <- block.tx,
+              input <- tx.in do
+            input in transaction.in
+          end
+
         Enum.filter(results, fn x -> x != false end) |> length() == 0
       else
         # false
         uncommitted_not_double_spent
       end
-    
+
     uncommitted_not_double_spent and chain_not_double_spent
   end
 
@@ -522,8 +540,8 @@ defmodule FullNode do
   end
 
   defp check_signature(transaction, public_key) do
-    {_, signature} = transaction.signature |> Base.decode16
-    {_, public_key} = public_key |> Atom.to_string() |> Base.decode16
+    {_, signature} = transaction.signature |> Base.decode16()
+    {_, public_key} = public_key |> Atom.to_string() |> Base.decode16()
 
     :crypto.verify(:ecdsa, :sha256, transaction.txid, signature, [public_key, :secp256k1])
   end
@@ -542,7 +560,7 @@ defmodule FullNode do
   # Add change address to the transaction output with given balance
   # Assign index to the change address
   @spec add_change_address_to_transaction(map, float, String.t()) :: tx_t
-  defp add_change_address_to_transaction(transaction, balance, sender) do
+  def add_change_address_to_transaction(transaction, balance, sender) do
     ip_out = transaction.out
     n_to_assign = length(ip_out)
 
@@ -560,8 +578,7 @@ defmodule FullNode do
   end
 
   @spec find_and_set_overall_hash_of_transaction(tx_t) :: tx_t
-  defp find_and_set_overall_hash_of_transaction(transaction) do
-
+  def find_and_set_overall_hash_of_transaction(transaction) do
     txid_to_set = get_hash_for_transaction(transaction)
 
     {_, transaction} = Map.get_and_update(transaction, :txid, fn x -> {x, txid_to_set} end)
@@ -598,12 +615,16 @@ defmodule FullNode do
     length(non_valid_inputs) == 0
   end
 
-  @spec set_signature_of_transaction(tx_t, String.t) :: tx_t 
+  @spec set_signature_of_transaction(tx_t, String.t()) :: tx_t
   defp set_signature_of_transaction(transaction, private_key) do
-    signature = :crypto.sign(:ecdsa, :sha256, transaction.txid, [private_key, :secp256k1]) |> Base.encode16()
+    signature =
+      :crypto.sign(:ecdsa, :sha256, transaction.txid, [private_key, :secp256k1])
+      |> Base.encode16()
+
     {_, transaction} = Map.get_and_update(transaction, :signature, fn x -> {x, signature} end)
     transaction
   end
+
   # CAST EXAMPLE 
   # def handle_cast({:print_state}, current_map) do
   #   IO.inspect(current_map)
