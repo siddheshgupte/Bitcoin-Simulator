@@ -64,7 +64,7 @@ defmodule UtilityFn do
   # Return Nonce and hexadecimal hash
   @spec find_nonce_and_hash(integer, String.t(), integer, String.t(), integer) ::
           {integer, String.t()}
-  defp find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce) do
+  def find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce) do
     hex_hash = get_hash(index, prev_hash, time, mrkl_root, nonce)
 
     # Check if first digit is zero 
@@ -237,7 +237,7 @@ defmodule UtilityFn do
     length(invalid_transactions) == 0
   end
 
-  defp check_signature(transaction, public_key) do
+  def check_signature(transaction, public_key) do
     {_, signature} = transaction.signature |> Base.decode16()
     {_, public_key} = public_key |> Atom.to_string() |> Base.decode16()
 
@@ -321,5 +321,15 @@ defmodule UtilityFn do
 
     {_, transaction} = Map.get_and_update(transaction, :signature, fn x -> {x, signature} end)
     transaction
+  end
+
+  def get_sender_from_transaction(transaction) do
+   senders = 
+    for op <- transaction.out do
+        if op.sender != "coinbase" do
+            op.sender
+        end
+    end
+    Enum.at(senders, 0)
   end
 end
