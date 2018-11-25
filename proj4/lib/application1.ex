@@ -2,20 +2,19 @@ defmodule Application1 do
   use Application
 
   def start(_type, num_of_nodes) do
-    
     list_of_private_keys =
       1..num_of_nodes
       |> Enum.map(fn x ->
         :crypto.hash(:sha, Integer.to_string(x)) |> Base.encode16()
       end)
-    
+
     list_of_public_keys =
       list_of_private_keys
-        |> Enum.map(fn x ->
-           {public_key, _} = :crypto.generate_key(:ecdh, :secp256k1, x)
-            public_key |> Base.encode16()
-          end)
-    
+      |> Enum.map(fn x ->
+        {public_key, _} = :crypto.generate_key(:ecdh, :secp256k1, x)
+        public_key |> Base.encode16()
+      end)
+
     genesis_block = start_blockchain(list_of_public_keys, list_of_private_keys)
 
     # list_of_public keys has strings
@@ -23,11 +22,31 @@ defmodule Application1 do
       Enum.zip(list_of_public_keys, list_of_private_keys)
       |> Enum.map(fn ele ->
         {public_key, private_key} = ele
+
         Supervisor.child_spec(
           {FullNode, [String.to_atom(public_key), private_key, genesis_block]},
           id: String.to_atom(public_key)
         )
       end)
+
+    wallets =
+      Enum.zip(list_of_public_keys, list_of_private_keys)
+      |> Enum.map(fn ele ->
+        {public_key, private_key} = ele
+
+        Supervisor.child_spec(
+          {SPV,
+           [
+             String.to_atom("wallet_#{public_key}"),
+             public_key,
+             private_key,
+             String.to_atom(public_key)
+           ]},
+          id: String.to_atom("wallet_#{public_key}")
+        )
+      end)
+
+    children = children
 
     opts = [strategy: :one_for_one, name: Supervisor]
     {:ok, supervisor} = Supervisor.start_link(children, opts)
@@ -44,11 +63,15 @@ defmodule Application1 do
       GenServer.cast(x, {:set_neighbours, List.delete(lst_of_nodes, x)})
     end)
 
+    Enum.each(wallets, fn x -> Supervisor.start_child(supervisor, x) end)
+
+    Supervisor.which_children(supervisor) |> IO.inspect()
+
     {:ok, self()}
   end
 
   # Make coin base with string identifier
-  @spec make_coinbase({String.t(), String.t}) :: map
+  @spec make_coinbase({String.t(), String.t()}) :: map
   def make_coinbase({public_key, private_key}) do
     %{
       :in => [
@@ -69,7 +92,8 @@ defmodule Application1 do
       ],
       :txid => :crypto.hash(:sha, "coinbase" <> public_key <> "25.0") |> Base.encode16(),
       :signature => "Placeholder"
-    } |> set_signature_of_transaction(private_key)
+    }
+    |> set_signature_of_transaction(private_key)
   end
 
   def start_blockchain(list_of_public_keys, list_of_private_keys) do
@@ -122,9 +146,11 @@ defmodule Application1 do
   end
 
   defp set_signature_of_transaction(transaction, private_key) do
-    signature = :crypto.sign(:ecdsa, :sha256, transaction.txid, [private_key, :secp256k1]) |> Base.encode16()
+    signature =
+      :crypto.sign(:ecdsa, :sha256, transaction.txid, [private_key, :secp256k1])
+      |> Base.encode16()
+
     {_, transaction} = Map.get_and_update(transaction, :signature, fn x -> {x, signature} end)
     transaction
   end
-
 end
