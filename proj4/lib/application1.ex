@@ -55,7 +55,6 @@ defmodule Application1 do
     # lst_of_nodes has atoms
     lst_of_nodes =
       Supervisor.which_children(supervisor)
-      |> IO.inspect()
       |> Enum.map(fn x -> elem(x, 0) end)
 
     # Make a fully connected network
@@ -91,7 +90,8 @@ defmodule Application1 do
         }
       ],
       :txid => :crypto.hash(:sha, "coinbase" <> public_key <> "25.0") |> Base.encode16(),
-      :signature => "Placeholder"
+      :signature => "Placeholder",
+      :fee => 0.0,
     }
     |> set_signature_of_transaction(private_key)
   end

@@ -1,7 +1,7 @@
 defmodule UtilityFn do
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
-  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t()}
+  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t(), fee: float}
   @type block_t :: %{
           index: integer,
           hash: String.t(),
@@ -114,6 +114,12 @@ defmodule UtilityFn do
 
   @spec add_coinbase_transaction(atom, [tx_t]) :: [tx_t]
   def add_coinbase_transaction(public_key, curr_tx) do
+
+    fees = 
+    for trans <- curr_tx, do: trans.fee
+
+    abc = 25.0 + Enum.sum(fees)
+
     coinbase = %{
       # Format for :in => [%{:hash, :n}, ...]
       :in => [
@@ -126,12 +132,13 @@ defmodule UtilityFn do
         %{
           :sender => "coinbase",
           :receiver => Atom.to_string(public_key),
-          :amount => 25.0,
+          :amount => abc,
           :n => 0
         }
       ],
+      :fee => 0.0,
       :txid =>
-        :crypto.hash(:sha, "coinbase" <> Atom.to_string(public_key) <> "25.0") |> Base.encode16()
+        :crypto.hash(:sha, "coinbase" <> Atom.to_string(public_key) <> Float.to_string(abc)) |> Base.encode16(),
     }
 
     [coinbase | curr_tx]

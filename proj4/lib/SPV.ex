@@ -7,7 +7,7 @@ defmodule SPV do
 
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
-  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t()}
+  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t(), fee: float}
   @type block_t :: %{
           index: integer,
           hash: String.t(),
@@ -53,7 +53,7 @@ defmodule SPV do
   def handle_cast({:make_transaction, ip_string, transaction_ips}, current_map) do
     # Split the input string
     # receiver 100.0
-    [receiver, amount] = String.split(ip_string)
+    [receiver, amount, fee] = String.split(ip_string)
 
     sender = current_map.public_key
 
@@ -82,7 +82,8 @@ defmodule SPV do
         }
       ],
       :txid => "Placeholder",
-      :signature => "Placeholder"
+      :signature => "Placeholder",
+      :fee => String.to_float(fee)
     }
 
     # # Add change address and set overall hash of transaction 
@@ -116,5 +117,5 @@ defmodule SPV do
 end
 
 
-# GenServer.cast(:wallet_0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1, {:make_transaction," 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0"  , [ %{ :hash => "8A12EB159B4EE7320FE4FF04F6C1088D5A8F078A", :n => 0 }]})
+# GenServer.cast(:wallet_0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1, {:make_transaction," 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0 1.0"  , [ %{ :hash => "8A12EB159B4EE7320FE4FF04F6C1088D5A8F078A", :n => 0 }]})
 # GenServer.cast(:"04EFEB65F418AB164360A5C51A6AA3A8B8B56150F21D6067EAA2C1E0F7FFAFCE472ECAEE94F4CFDF6E8EBCADB3A17C4D584EEFF0E076C9333383651EFEC0C29FFA",{:mine})
