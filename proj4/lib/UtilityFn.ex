@@ -1,10 +1,16 @@
 defmodule UtilityFn do
-@moduledoc """
-This module implements all the verification, calculation functions.
-"""
+  @moduledoc """
+  This module implements all the verification, calculation functions.
+  """
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
-  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t(), fee: float}
+  @type tx_t :: %{
+          in: [tx_in_t],
+          out: [tx_out_t],
+          txid: String.t(),
+          signature: String.t(),
+          fee: float
+        }
   @type block_t :: %{
           index: integer,
           hash: String.t(),
@@ -133,14 +139,12 @@ This module implements all the verification, calculation functions.
     IO.inspect(length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0)
   end
 
-  @doc """ 
+  @doc """
   Adds a coinbase transaction
   """
   @spec add_coinbase_transaction(atom, [tx_t]) :: [tx_t]
   def add_coinbase_transaction(public_key, curr_tx) do
-
-    fees = 
-    for trans <- curr_tx, do: trans.fee
+    fees = for trans <- curr_tx, do: trans.fee
 
     amt = 25.0 + Enum.sum(fees)
 
@@ -162,7 +166,8 @@ This module implements all the verification, calculation functions.
       ],
       :fee => 0.0,
       :txid =>
-        :crypto.hash(:sha, "coinbase" <> Atom.to_string(public_key) <> Float.to_string(amt)) |> Base.encode16(),
+        :crypto.hash(:sha, "coinbase" <> Atom.to_string(public_key) <> Float.to_string(amt))
+        |> Base.encode16()
     }
 
     [coinbase | curr_tx]
@@ -181,7 +186,6 @@ This module implements all the verification, calculation functions.
   Builds a merkle tree and returns root and the tree as well
   """
   def get_mrkl_tree_and_root(lst_tx) do
-
     # # if length is not even
     # if length(lst_tx) |> rem(2) !=0 do
     #   lst_tx ++ List.last(lst_tx)
@@ -393,12 +397,13 @@ This module implements all the verification, calculation functions.
   Finds a sender from a group of transactions
   """
   def get_sender_from_transaction(transaction) do
-   senders = 
-    for op <- transaction.out do
+    senders =
+      for op <- transaction.out do
         if op.sender != "coinbase" do
-            op.sender
+          op.sender
         end
-    end
+      end
+
     Enum.at(senders, 0)
   end
 end

@@ -15,7 +15,13 @@ defmodule SPV do
 
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
-  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t(), fee: float}
+  @type tx_t :: %{
+          in: [tx_in_t],
+          out: [tx_out_t],
+          txid: String.t(),
+          signature: String.t(),
+          fee: float
+        }
   @type block_t :: %{
           index: integer,
           hash: String.t(),
@@ -38,7 +44,7 @@ defmodule SPV do
         :public_key => public_key,
         :private_key => private_key,
         :associated_full_node => associated_full_node,
-        :cached_blocks => [],
+        :cached_blocks => []
       },
       name: input_name
     )
@@ -81,33 +87,43 @@ defmodule SPV do
     bloom_filter_for_addresses = BloomFilter.new(10, 0.001)
     # Add addresses to bloom filter
     # Enum.each(current_map.public_keys, fn x -> BloomFilter.add(bloom_filter_for_addresses, current_map.public_key) end)
-    bloom_filter_for_addresses = BloomFilter.add(bloom_filter_for_addresses, current_map.public_key)
+    bloom_filter_for_addresses =
+      BloomFilter.add(bloom_filter_for_addresses, current_map.public_key)
 
     # TODO: check if we find the txid in cached blocks
 
     # Get blocks from associated full node
     required_blocks =
-     GenServer.call(current_map.associated_full_node, {:get_required_blocks, bloom_filter_for_addresses, current_map.public_key})
+      GenServer.call(
+        current_map.associated_full_node,
+        {:get_required_blocks, bloom_filter_for_addresses, current_map.public_key}
+      )
 
     # Add to cached blocks
-    {_, current_map} = 
+    {_, current_map} =
       Map.get_and_update(current_map, :cached_blocks, fn x -> {x, required_blocks} end)
 
     txids_to_find =
       transaction_ips
       |> Enum.map(fn x -> x.hash end)
 
-    required_blocks = Enum.filter(required_blocks, fn block ->
+    required_blocks =
+      Enum.filter(required_blocks, fn block ->
         for tx <- block.tx do
           tx.txid in txids_to_find
         end
-    end)
+      end)
 
     # Input to the are_inputs_valid_and_difference is a string
-    amount_with_fee = (String.to_float(amount) + String.to_float(fee)) |> Float.to_string() 
+    amount_with_fee = (String.to_float(amount) + String.to_float(fee)) |> Float.to_string()
 
     {are_inputs_valid?, balance} =
-        UtilityFn.are_inputs_valid_and_difference(sender, amount_with_fee, required_blocks, transaction_ips)
+      UtilityFn.are_inputs_valid_and_difference(
+        sender,
+        amount_with_fee,
+        required_blocks,
+        transaction_ips
+      )
 
     # # Make transaction
     transaction = %{
@@ -148,14 +164,12 @@ defmodule SPV do
     {:noreply, current_map}
   end
 
-  
   # Print state for debugging
   def handle_cast({:print_state}, current_map) do
     IO.inspect(current_map)
     {:noreply, current_map}
   end
 end
-
 
 # GenServer.cast(:wallet_0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1, {:make_transaction," 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0 1.0"  , [ %{ :hash => "8A12EB159B4EE7320FE4FF04F6C1088D5A8F078A", :n => 0 }]})
 # GenServer.cast(:"04EFEB65F418AB164360A5C51A6AA3A8B8B56150F21D6067EAA2C1E0F7FFAFCE472ECAEE94F4CFDF6E8EBCADB3A17C4D584EEFF0E076C9333383651EFEC0C29FFA",{:mine})

@@ -1,5 +1,6 @@
 defmodule Application1 do
   use Application
+
   @moduledoc """
   Driver module for initializing the simulation
   """
@@ -72,7 +73,6 @@ defmodule Application1 do
     {:ok, self()}
   end
 
-
   # Make coin base with string identifier
   @spec make_coinbase({String.t(), String.t()}) :: map
   def make_coinbase({public_key, private_key}) do
@@ -95,7 +95,7 @@ defmodule Application1 do
       ],
       :txid => :crypto.hash(:sha, "coinbase" <> public_key <> "25.0") |> Base.encode16(),
       :signature => "Placeholder",
-      :fee => 0.0,
+      :fee => 0.0
     }
     |> set_signature_of_transaction(private_key)
   end
