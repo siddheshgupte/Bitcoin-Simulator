@@ -1,4 +1,7 @@
 defmodule UtilityFn do
+@moduledoc """
+This module implements all the verification, calculation functions used.
+"""
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
   @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t(), fee: float}
@@ -15,9 +18,16 @@ defmodule UtilityFn do
           difficulty: integer
         }
 
-  # Returns a tuple {are_inputs_valid?, balance}
-  # balance is (amounts in referred transactions - amount to send)
-  # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
+  @doc """
+  Returns a tuple {are_inputs_valid?, balance}
+  balance is (amounts in referred transactions - amount to send)
+  transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
+
+  ## VERIFY INPUTS
+    1. Check if the sender was the receiver in those transactions
+    2. Check if sum of all those amounts >= amount
+
+  """
   @spec are_inputs_valid_and_difference(String.t(), String.t(), list, [tx_in_t]) ::
           {boolean, float}
   def are_inputs_valid_and_difference(sender, amount, chain, transaction_ips) do
@@ -61,7 +71,10 @@ defmodule UtilityFn do
     end
   end
 
-  # Return Nonce and hexadecimal hash
+  @doc """
+  Return Nonce and hexadecimal hash
+  This is the actual mining method
+  """
   @spec find_nonce_and_hash(integer, String.t(), integer, String.t(), integer) ::
           {integer, String.t()}
   def find_nonce_and_hash(index, prev_hash, time, mrkl_root, nonce) do
@@ -75,7 +88,9 @@ defmodule UtilityFn do
     end
   end
 
-  # Return hexadecimal hash
+  @doc """
+  Return hexadecimal hash
+  """
   @spec get_hash(integer, String.t(), integer, String.t(), integer) :: String.t()
   def get_hash(index, prev_hash, time, mrkl_root, nonce) do
     ip =
@@ -85,13 +100,18 @@ defmodule UtilityFn do
     :crypto.hash(:sha, ip) |> Base.encode16()
   end
 
+  @doc """
+  Verifies the blocks hash
+  """
   @spec verify_block_hash(block_t) :: boolean
   def verify_block_hash(block) do
     # Check if incoming block is valid
     get_hash(block.index, block.prev_hash, block.time, block.mrkl_root, block.nonce) == block.hash
   end
 
-  # Verify if blockchain is valid
+  @doc """
+  Verify if blockchain is valid
+  """
   @spec verify_blockchain([block_t]) :: boolean
   def verify_blockchain(chain) do
     # Verify linked list
@@ -112,13 +132,16 @@ defmodule UtilityFn do
     IO.inspect(length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0)
   end
 
+  @doc """ 
+  Adds a coinbase transaction
+  """
   @spec add_coinbase_transaction(atom, [tx_t]) :: [tx_t]
   def add_coinbase_transaction(public_key, curr_tx) do
 
     fees = 
     for trans <- curr_tx, do: trans.fee
 
-    abc = 25.0 + Enum.sum(fees)
+    amt = 25.0 + Enum.sum(fees)
 
     coinbase = %{
       # Format for :in => [%{:hash, :n}, ...]
@@ -132,26 +155,31 @@ defmodule UtilityFn do
         %{
           :sender => "coinbase",
           :receiver => Atom.to_string(public_key),
-          :amount => abc,
+          :amount => amt,
           :n => 0
         }
       ],
       :fee => 0.0,
       :txid =>
-        :crypto.hash(:sha, "coinbase" <> Atom.to_string(public_key) <> Float.to_string(abc)) |> Base.encode16(),
+        :crypto.hash(:sha, "coinbase" <> Atom.to_string(public_key) <> Float.to_string(amt)) |> Base.encode16(),
     }
 
     [coinbase | curr_tx]
   end
 
+  @doc """
+  Give transactions priiority according to the fees given
+  """
   @spec get_list_highest_priority_uncommitted_transactions([tx_t]) :: [tx_t]
   def get_list_highest_priority_uncommitted_transactions(lst_uncommitted_transactions) do
     # TODO: Return transactions according to the fees here
     lst_uncommitted_transactions
   end
 
+  @doc """
+  Builds a merkle tree and returns root and the tree as well
+  """
   def get_mrkl_tree_and_root(lst_tx) do
-    # TODO: Implement Merkle Tree
 
     # # if length is not even
     # if length(lst_tx) |> rem(2) !=0 do
@@ -167,7 +195,9 @@ defmodule UtilityFn do
     {hashed.value, hashed}
   end
 
-  # Finds the combined hash for all the transactions in a transaction
+  @doc """
+  Finds the combined hash for all the transactions in a transaction
+  """
   @spec get_hash_for_transaction(tx_t) :: String.t()
   def get_hash_for_transaction(transaction) do
     # Collect all senders in a list
@@ -194,12 +224,22 @@ defmodule UtilityFn do
     :crypto.hash(:sha, senders <> receivers <> amounts) |> Base.encode16()
   end
 
+  @doc """
+  Checks if the hash of the transaction matches
+  """
   @spec check_if_transaction_valid(tx_t) :: boolean
   def check_if_transaction_valid(transaction) do
     txid_calculated = get_hash_for_transaction(transaction)
     txid_calculated == transaction.txid
   end
 
+  @doc """
+  Checks if a transaction is a double spend or not
+
+      1. Check in uncommitted transactions if the input is equal to the inputs given here
+      2. Check all blocks' transactions inputs to check if input is equal to the inputs given here 
+
+  """
   @spec is_not_double_spend?(tx_t, [tx_t], [block_t]) :: boolean
   def is_not_double_spend?(transaction, uncommitted_transactions, chain) do
     # 1. Check in uncommitted transactions if the input is equal to the inputs given here
@@ -231,6 +271,9 @@ defmodule UtilityFn do
     uncommitted_not_double_spent and chain_not_double_spent
   end
 
+  @doc """
+  Checks if all transactions in a block are valid
+  """
   @spec check_if_all_transactions_valid(block_t) :: boolean
   def check_if_all_transactions_valid(block) do
     # For each transaction in block call check_if_transaction_valid()
@@ -240,10 +283,12 @@ defmodule UtilityFn do
       # Check which elements return false for check_if_transaction_valid 
       |> Enum.filter(fn tx -> not check_if_transaction_valid(tx) end)
 
-    # Return true for now because this is being used in mine method
     length(invalid_transactions) == 0
   end
 
+  @doc """
+  Verifies the signature of a transaction
+  """
   def check_signature(transaction, public_key) do
     {_, signature} = transaction.signature |> Base.decode16()
     {_, public_key} = public_key |> Atom.to_string() |> Base.decode16()
@@ -251,6 +296,9 @@ defmodule UtilityFn do
     :crypto.verify(:ecdsa, :sha256, transaction.txid, signature, [public_key, :secp256k1])
   end
 
+  @doc """
+  Removes the transaction from uncommitted transactions in a block
+  """
   @spec remove_transactions_from_uncommitted_transactions([tx_t], map) :: map
   def remove_transactions_from_uncommitted_transactions(tx_to_remove, current_map) do
     new_uncommitted =
@@ -262,8 +310,10 @@ defmodule UtilityFn do
     map_to_return
   end
 
-  # Add change address to the transaction output with given balance
-  # Assign index to the change address
+  @doc """
+  Add change address to the transaction output with given balance
+  Assign index to the change address
+  """
   @spec add_change_address_to_transaction(map, float, String.t()) :: tx_t
   def add_change_address_to_transaction(transaction, balance, sender) do
     ip_out = transaction.out
@@ -282,6 +332,9 @@ defmodule UtilityFn do
     transaction
   end
 
+  @doc """
+  Finds and sets the txid for a group of transactions
+  """
   @spec find_and_set_overall_hash_of_transaction(tx_t) :: tx_t
   def find_and_set_overall_hash_of_transaction(transaction) do
     txid_to_set = get_hash_for_transaction(transaction)
@@ -292,9 +345,11 @@ defmodule UtilityFn do
     transaction
   end
 
-  # Check if inputs of the transaction are valid
-  # This checks it for all the transactions in the transaction.out
-  # i.e calls are_inputs_valid_and_difference() for all transactions in transaction.out
+  @doc """
+  Check if inputs of the transaction are valid
+  This checks it for all the transactions in the transaction.out
+  i.e calls are_inputs_valid_and_difference() for all transactions in transaction.out
+  """
   @spec inputs_of_transaction_valid?(tx_t, map) :: boolean
   def inputs_of_transaction_valid?(transaction, current_map) do
     # Anonymous function for filtering out change addresses
@@ -320,6 +375,9 @@ defmodule UtilityFn do
     length(non_valid_inputs) == 0
   end
 
+  @doc """
+  Sets signature of the transaction
+  """
   @spec set_signature_of_transaction(tx_t, String.t()) :: tx_t
   def set_signature_of_transaction(transaction, private_key) do
     signature =
@@ -330,6 +388,9 @@ defmodule UtilityFn do
     transaction
   end
 
+  @doc """
+  Finds a sender from a group of transactions
+  """
   def get_sender_from_transaction(transaction) do
    senders = 
     for op <- transaction.out do

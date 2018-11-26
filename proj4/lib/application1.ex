@@ -1,5 +1,8 @@
 defmodule Application1 do
   use Application
+  @moduledoc """
+  Driver module for initializing the simulation
+  """
 
   def start(_type, num_of_nodes) do
     list_of_private_keys =
@@ -68,6 +71,7 @@ defmodule Application1 do
 
     {:ok, self()}
   end
+
 
   # Make coin base with string identifier
   @spec make_coinbase({String.t(), String.t()}) :: map

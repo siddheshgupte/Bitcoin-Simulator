@@ -1,6 +1,13 @@
 defmodule SPV do
   @moduledoc """
       This module implements a SPV - i.e wallet.
+      
+   1. Get all required blocks from associated full node
+   2. Check if inputs are valid
+   3. Check Merkle root as well
+   4. Make transaction (Make sure signature is done)
+   5. Send to associated nodes {:add_transaction}
+
   """
   use GenServer, restart: :temporary
   import UtilityFn, only: :functions
@@ -46,9 +53,11 @@ defmodule SPV do
   # 4. Make transaction (Make sure signature is done)
   # 5. Send to associated nodes {:add_transaction}
 
-  # Take input as a space separated string of the form "Receiver Amount"
-  # Transaction_ips is a list of transactions to use as input for this transaction
-  # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}, ...]
+  @doc """
+  Take input as a space separated string of the form "Receiver Amount"
+  Transaction_ips is a list of transactions to use as input for this transaction
+  transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}, ...]
+  """
   @spec handle_cast({:make_transaction, String.t(), [tx_in_t]}, map) :: {:noreply, map}
   def handle_cast({:make_transaction, ip_string, transaction_ips}, current_map) do
     # Split the input string
@@ -66,8 +75,11 @@ defmodule SPV do
 
     required_blocks = GenServer.call(current_map.associated_full_node, {:get_required_blocks, transaction_ips})
 
+    # Input to the are_inputs_valid_and_difference is a string
+    amount_with_fee = (String.to_float(amount) + String.to_float(fee)) |> Float.to_string() 
+
     {are_inputs_valid?, balance} =
-        UtilityFn.are_inputs_valid_and_difference(sender, amount, required_blocks, transaction_ips)
+        UtilityFn.are_inputs_valid_and_difference(sender, amount_with_fee, required_blocks, transaction_ips)
 
     # # Make transaction
     transaction = %{

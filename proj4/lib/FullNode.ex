@@ -27,7 +27,6 @@ defmodule FullNode do
       __MODULE__,
       %{
         :public_key => input_name,
-        :private_key => private_key,
         :chain => genesis_block,
         :uncommitted_transactions => [],
         :neighbours => []
@@ -41,9 +40,11 @@ defmodule FullNode do
     {:ok, initial_map}
   end
 
-  # Take input as a space separated string of the form "Sender Receiver Amount"
-  # Transaction_ips is a list of transactions to use as input for this transaction
-  # transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}, ...]
+  @doc """
+  Take input as a space separated string of the form "Sender Receiver Amount"
+  Transaction_ips is a list of transactions to use as input for this transaction
+  transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}, ...]
+  """
   @spec handle_cast({:make_transaction, String.t(), [tx_in_t]}, map) :: {:noreply, map}
   def handle_cast({:make_transaction, ip_string, transaction_ips}, current_map) do
     # Split the input string
@@ -85,7 +86,6 @@ defmodule FullNode do
         # Set overall hash of the transaction
         |> find_and_set_overall_hash_of_transaction()
         # Set signature
-        # TODO: Change this to private key of the person doing the transaction
         |> set_signature_of_transaction(current_map.private_key)
       end
 
@@ -97,8 +97,15 @@ defmodule FullNode do
     {:noreply, current_map}
   end
 
-  # Adds a transaction to the front of the local uncommitted transaction list if valid
-  # Also will start the transaction gossip
+  @doc """
+  Adds a transaction to the front of the local uncommitted transaction list if valid
+  Also will start the transaction gossip
+
+   1. Check if transaction's hash is valid
+   2. Check if transaction is a double spend
+   3. Check the signature of the transaction
+
+  """
   @spec handle_cast({:add_transaction, tx_t}, map) :: {:noreply, map}
   def handle_cast({:add_transaction, transaction}, current_map) do
     # 1. Check if transaction's hash is valid
@@ -131,6 +138,10 @@ defmodule FullNode do
     {:noreply, current_map}
   end
 
+  @doc """
+  Starts mining the uncommitted transactions into a block at the current node and
+  removes the transactions from uncommitted transactions once the block is made 
+  """
   def handle_cast({:mine}, current_map) do
     # Last block in the chain is at index 0 (We are adding to the front of the chain)
     prev_block = Enum.at(current_map.chain, 0)
@@ -184,13 +195,17 @@ defmodule FullNode do
     {:noreply, current_map}
   end
 
-  # Print state for debugging
+  @doc """
+  Print state for debugging
+  """
   def handle_cast({:print_state}, current_map) do
     IO.inspect(current_map)
     {:noreply, current_map}
   end
 
-  # Verify the entire chain
+  @doc """
+  Verify the entire chain
+  """
   def handle_cast({:full_verify}, current_map) do
     verify_blockchain(current_map.chain)
     {:noreply, current_map}
@@ -200,7 +215,9 @@ defmodule FullNode do
   #  GOSSIP
   # ----------------------------------------------------------------------------------------------
 
-  # Append to neighbours list
+  @doc """
+  Append to neighbours list
+  """
   @spec handle_cast({:set_neighbours, [atom]}, map) :: {:noreply, map}
   def handle_cast({:set_neighbours, lst_neighbours}, current_map) do
     {_, current_map} =
@@ -209,6 +226,15 @@ defmodule FullNode do
     {:noreply, current_map}
   end
 
+  @doc """
+  Gossips the transactions to 8 other neighbours. This is called first from the make_transaction method.
+  ## Don't propagate if
+     1. This transaction already exists in uncommitted
+     2. Signature isn't valid
+     3. Transaction isn't valid for it's hash
+     4. Inputs of the transaction aren't valid
+     5. Is a double spend wrt already seen transactions - take the input and check uncommitted + all blockchain transactions inputs 
+  """
   # Gossip transaction. Can combine with {:add_transaction} in the end if necessary
   @spec handle_cast({:gossip_transaction, tx_t}, map) :: {:noreply, map}
   def handle_cast({:gossip_transaction, transaction}, current_map) do
@@ -255,7 +281,14 @@ defmodule FullNode do
     {:noreply, current_map}
   end
 
-  # Gossip the block to 8 other neighbours
+  @doc """
+  Gossip the block to 8 other neighbours
+   Verify Block
+     1. Is this a new block?
+     2. Is the block valid?
+     3. Are all the transactions in this block valid? (Check double spends also here?)
+     4. Builds on the current known longest chain? (to avoid forks)
+  """
   @spec handle_cast({:gossip_block, block_t}, map) :: {:noreply, map}
   def handle_cast({:gossip_block, block}, current_map) do
     is_new_block = not Enum.member?(current_map.chain, block)
@@ -301,6 +334,9 @@ defmodule FullNode do
     {:noreply, current_map}
   end
 
+  @doc """
+  Fetches the required blocks from the chain
+  """
   def handle_call({:get_required_blocks, transaction_ips}, _from, current_map) do
     txids_to_find =
       transaction_ips
