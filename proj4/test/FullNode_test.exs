@@ -148,7 +148,6 @@ defmodule FullNodeTest do
            ) == {true, 15.0}
   end
 
-
   # Functional test
   test "Create a transaction" do
     lst_of_nodes = Application1.start(:abc, 10)
