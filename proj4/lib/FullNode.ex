@@ -7,7 +7,13 @@ defmodule FullNode do
 
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
-  @type tx_t :: %{in: [tx_in_t], out: [tx_out_t], txid: String.t(), signature: String.t(), fee: float}
+  @type tx_t :: %{
+          in: [tx_in_t],
+          out: [tx_out_t],
+          txid: String.t(),
+          signature: String.t(),
+          fee: float
+        }
   @type block_t :: %{
           index: integer,
           hash: String.t(),
@@ -58,7 +64,12 @@ defmodule FullNode do
     # 5. Send to {:add_transaction}
 
     {are_inputs_valid?, balance} =
-    UtilityFn.are_inputs_valid_and_difference(sender, amount, current_map.chain, transaction_ips)
+      UtilityFn.are_inputs_valid_and_difference(
+        sender,
+        amount,
+        current_map.chain,
+        transaction_ips
+      )
 
     # # Make transaction
     transaction = %{
@@ -114,7 +125,7 @@ defmodule FullNode do
 
     # Check if transaction is valid and not a double spend
     if UtilityFn.check_if_transaction_valid(transaction) and
-    UtilityFn.is_not_double_spend?(
+         UtilityFn.is_not_double_spend?(
            transaction,
            current_map.uncommitted_transactions,
            current_map.chain
@@ -152,10 +163,13 @@ defmodule FullNode do
     curr_time = System.system_time(:second)
 
     curr_tx =
-    UtilityFn.get_list_highest_priority_uncommitted_transactions(current_map.uncommitted_transactions)
+      UtilityFn.get_list_highest_priority_uncommitted_transactions(
+        current_map.uncommitted_transactions
+      )
 
     # Remove from uncommitted transactions
-    current_map = UtilityFn.remove_transactions_from_uncommitted_transactions(curr_tx, current_map)
+    current_map =
+      UtilityFn.remove_transactions_from_uncommitted_transactions(curr_tx, current_map)
 
     # Make coinbase transaction and add to curr_tx
     curr_tx = UtilityFn.add_coinbase_transaction(current_map.public_key, curr_tx)
@@ -163,7 +177,7 @@ defmodule FullNode do
     {curr_mrkl_root, curr_mrkl_tree} = UtilityFn.get_mrkl_tree_and_root(curr_tx)
 
     {curr_nonce, curr_hash} =
-    UtilityFn.find_nonce_and_hash(curr_index, curr_prev_hash, curr_time, curr_mrkl_root, 0)
+      UtilityFn.find_nonce_and_hash(curr_index, curr_prev_hash, curr_time, curr_mrkl_root, 0)
 
     # Make block
     curr_block = %{
@@ -242,14 +256,15 @@ defmodule FullNode do
     # 4. Inputs of the transaction aren't valid
     # 5. Is a double spend wrt already seen transactions - take the input and check uncommitted + all blockchain transactions inputs 
 
-    sender_public_key_atom = UtilityFn.get_sender_from_transaction(transaction) |> String.to_atom
+    sender_public_key_atom =
+      UtilityFn.get_sender_from_transaction(transaction) |> String.to_atom()
 
     {should_propagate, current_map} =
       if not Enum.member?(current_map.uncommitted_transactions, transaction) and
-      UtilityFn.check_signature(transaction, sender_public_key_atom) and
-      UtilityFn.check_if_transaction_valid(transaction) and
-      UtilityFn.inputs_of_transaction_valid?(transaction, current_map) and
-      UtilityFn.is_not_double_spend?(
+           UtilityFn.check_signature(transaction, sender_public_key_atom) and
+           UtilityFn.check_if_transaction_valid(transaction) and
+           UtilityFn.inputs_of_transaction_valid?(transaction, current_map) and
+           UtilityFn.is_not_double_spend?(
              transaction,
              current_map.uncommitted_transactions,
              current_map.chain
@@ -305,8 +320,8 @@ defmodule FullNode do
     IO.inspect(block)
 
     {should_propagate, current_map} =
-      if is_new_block and UtilityFn.verify_block_hash(block) and UtilityFn.check_if_all_transactions_valid(block) and
-           builds_on_curr_longest do
+      if is_new_block and UtilityFn.verify_block_hash(block) and
+           UtilityFn.check_if_all_transactions_valid(block) and builds_on_curr_longest do
         # Add to local blockchain
         {_, map_to_return} =
           Map.get_and_update(current_map, :chain, fn x ->
@@ -314,7 +329,8 @@ defmodule FullNode do
           end)
 
         # Remove from uncommitted transactions
-        map_to_return = UtilityFn.remove_transactions_from_uncommitted_transactions(block.tx, map_to_return)
+        map_to_return =
+          UtilityFn.remove_transactions_from_uncommitted_transactions(block.tx, map_to_return)
 
         # {should_propagate, current_map}
         {true, map_to_return}
@@ -336,18 +352,34 @@ defmodule FullNode do
   @doc """
   Fetches the required blocks from the chain
   """
-  def handle_call({:get_required_blocks, transaction_ips}, _from, current_map) do
-    txids_to_find =
-      transaction_ips
-      |> Enum.map(fn x -> x.hash end)
+  # def handle_call({:get_required_blocks, transaction_ips}, _from, current_map) do
+  # txids_to_find =
+  #   transaction_ips
+  #   |> Enum.map(fn x -> x.hash end)
 
-    required_blocks = 
+  # required_blocks = 
+  #   for block <- current_map.chain,
+  #     tx <- block.tx do
+  #       if tx.txid in txids_to_find do
+  #         block
+  #       end
+  #     end
+
+  # required_blocks = Enum.filter(required_blocks, &(&1 != nil))
+  # {:reply, required_blocks, current_map}
+  def handle_call(
+        {:get_required_blocks, bloom_filter_for_addresses, public_key},
+        _from,
+        current_map
+      ) do
+    required_blocks =
       for block <- current_map.chain,
-        tx <- block.tx do
-          if tx.txid in txids_to_find do
-            block
-          end
+          tx <- block.tx,
+          op <- tx.out do
+        if BloomFilter.has?(bloom_filter_for_addresses, op.receiver) do
+          block
         end
+      end
 
     required_blocks = Enum.filter(required_blocks, &(&1 != nil))
     {:reply, required_blocks, current_map}
