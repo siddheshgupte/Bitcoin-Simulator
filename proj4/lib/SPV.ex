@@ -114,12 +114,8 @@ defmodule SPV do
     {:noreply, current_map}
   end
 
-  def handle_cast({:check_transaction}, current_map) do
-    current_chain = Map.get(current_map, :chain)
-    last_added_block = Enum.at(current_chain,0)
-    IO.inspect Map.get(current_map, :hash)
 
-  end
+
 end
 
 

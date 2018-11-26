@@ -1,11 +1,12 @@
-defmodule Proj4Test do
+defmodule FullNodeTest do
   use ExUnit.Case
-  doctest Proj4
+  doctest FullNode
 
   Application1.start(:abc, 10)
 
+  # Unit test
   test "Check if inputs are valid" do
-    assert Proj4.are_inputs_valid_and_difference(
+    assert UtilityFn.are_inputs_valid_and_difference(
              "B1D5781111D84F7B3FE45A0852E59758CD7A87E5",
              "10.0",
              [
@@ -147,14 +148,30 @@ defmodule Proj4Test do
            ) == {true, 15.0}
   end
 
+
+  # Functional test
   test "Create a transaction" do
-    assert GenServer.cast(:"0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1", {:make_transaction,"0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0"  , [ %{ :hash => "8A12EB159B4EE7320FE4FF04F6C1088D5A8F078A", :n => 0 }]}) 
-    == true
+    lst_of_nodes = Application1.start(:abc, 10)
+    GenServer.cast(:wallet_0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1, {:make_transaction," 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0"  , [ %{ :hash => "8A12EB159B4EE7320FE4FF04F6C1088D5A8F078A", :n => 0 }]})
+    curr_maps = Enum.map(lst_of_nodes, 
+      fn x -> GenServer.call(x, {:get_state})
+    end)
+    #IO.inspect curr_maps
+
+    for curr_map <- curr_maps,
+      uncommitted_transaction <- curr_map.uncommitted_transactions,
+        tx <- uncommitted_transaction do
+          if tx.out.sender == "048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9" do
+            assert true
+          end
+    end
+
   end
 
+
   test "Verify entire chain" do
-    assert GenServer.cast(
-             :B1D5781111D84F7B3FE45A0852E59758CD7A87E5,
+    assert GenServer.call(
+          :"0443E747FC563ED3F7438DE87405B24A1DF47CF4A179D32A0B37DBBDFF25285A4437AB70A7FF54519CA8E780B7EA5710610BBED38E5F7EDA92870EE7F5F77783C2",
              {:full_verify,
               [
                 %{
@@ -291,11 +308,11 @@ defmodule Proj4Test do
                   ]
                 }
               ]}
-           ) == :ok
+           ) == true
   end
 
   test "Verify block hash" do
-    assert Proj4.verify_block_hash(
+    assert FullNode.verify_block_hash(
             %{
              difficulty: 1,
              hash: "00C9793855C0EA58EA8A9F431D168CA4F9ADA248",
@@ -432,7 +449,7 @@ defmodule Proj4Test do
   end
 
   test "Check if all tansactions all valid in a block " do
-    assert Proj4.check_if_all_transactions_valid(%{
+    assert FullNode.check_if_all_transactions_valid(%{
       difficulty: 1,
       hash: "00C9793855C0EA58EA8A9F431D168CA4F9ADA248",
       index: 1,

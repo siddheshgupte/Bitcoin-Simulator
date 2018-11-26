@@ -109,7 +109,7 @@ defmodule UtilityFn do
         x.hash != get_hash(x.index, x.prev_hash, x.time, x.mrkl_root, x.nonce)
       end)
 
-    IO.inspect(length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0)
+    length(invalid_hash_blocks) == 0 and length(invalid_chain) == 0
   end
 
   @spec add_coinbase_transaction(atom, [tx_t]) :: [tx_t]

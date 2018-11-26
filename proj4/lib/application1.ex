@@ -64,10 +64,7 @@ defmodule Application1 do
     end)
 
     Enum.each(wallets, fn x -> Supervisor.start_child(supervisor, x) end)
-
-    Supervisor.which_children(supervisor) |> IO.inspect()
-
-    {:ok, self()}
+    lst_of_nodes
   end
 
   # Make coin base with string identifier
