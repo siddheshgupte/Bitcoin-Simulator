@@ -1,6 +1,6 @@
 defmodule UtilityFn do
 @moduledoc """
-This module implements all the verification, calculation functions used.
+This module implements all the verification, calculation functions.
 """
   @type tx_in_t :: %{hash: String.t(), n: integer}
   @type tx_out_t :: %{sender: String.t(), receiver: String.t(), amount: float, n: integer}
@@ -24,8 +24,9 @@ This module implements all the verification, calculation functions used.
   transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}]
 
   ## VERIFY INPUTS
-    1. Check if the sender was the receiver in those transactions
-    2. Check if sum of all those amounts >= amount
+
+      1. Check if the sender was the receiver in those transactions
+      2. Check if sum of all those amounts >= amount
 
   """
   @spec are_inputs_valid_and_difference(String.t(), String.t(), list, [tx_in_t]) ::

@@ -337,21 +337,32 @@ defmodule FullNode do
   @doc """
   Fetches the required blocks from the chain
   """
-  def handle_call({:get_required_blocks, transaction_ips}, _from, current_map) do
-    txids_to_find =
-      transaction_ips
-      |> Enum.map(fn x -> x.hash end)
+  # def handle_call({:get_required_blocks, transaction_ips}, _from, current_map) do
+    # txids_to_find =
+    #   transaction_ips
+    #   |> Enum.map(fn x -> x.hash end)
 
+    # required_blocks = 
+    #   for block <- current_map.chain,
+    #     tx <- block.tx do
+    #       if tx.txid in txids_to_find do
+    #         block
+    #       end
+    #     end
+
+    # required_blocks = Enum.filter(required_blocks, &(&1 != nil))
+  # {:reply, required_blocks, current_map}
+  def handle_call({:get_required_blocks, bloom_filter_for_addresses, public_key}, _from, current_map) do
     required_blocks = 
       for block <- current_map.chain,
-        tx <- block.tx do
-          if tx.txid in txids_to_find do
-            block
+        tx <- block.tx,
+          op <- tx.out do
+            if BloomFilter.has?(bloom_filter_for_addresses, op.receiver) do
+              block
+            end
           end
-        end
-
     required_blocks = Enum.filter(required_blocks, &(&1 != nil))
-  {:reply, required_blocks, current_map}
+    {:reply, required_blocks, current_map}
   end
 end
 

@@ -2,13 +2,14 @@ defmodule SPV do
   @moduledoc """
       This module implements a SPV - i.e wallet.
       
-   1. Get all required blocks from associated full node
+   1. Get all required blocks from associated full node and cache them
    2. Check if inputs are valid
    3. Check Merkle root as well
    4. Make transaction (Make sure signature is done)
    5. Send to associated nodes {:add_transaction}
 
   """
+  # use BloomFilter
   use GenServer, restart: :temporary
   import UtilityFn, only: :functions
 
@@ -36,7 +37,8 @@ defmodule SPV do
         :name => input_name,
         :public_key => public_key,
         :private_key => private_key,
-        :associated_full_node => associated_full_node
+        :associated_full_node => associated_full_node,
+        :cached_blocks => [],
       },
       name: input_name
     )
@@ -47,7 +49,7 @@ defmodule SPV do
     {:ok, initial_map}
   end
 
-  # 1. Get all required blocks from associated full node
+  # 1. Get all required blocks from associated full node 
   # 2. Check if inputs are valid
   # 3. Check Merkle root as well
   # 4. Make transaction (Make sure signature is done)
@@ -56,7 +58,9 @@ defmodule SPV do
   @doc """
   Take input as a space separated string of the form "Receiver Amount"
   Transaction_ips is a list of transactions to use as input for this transaction
-  transaction_ip is of the form [%{:hash => txid, :n => index of the transaction}, ...]
+  transaction_ips is of the form [%{:hash => txid, :n => index of the transaction}, ...]
+
+  Uses Bloom Filter to get required blocks from the full node and caches them
   """
   @spec handle_cast({:make_transaction, String.t(), [tx_in_t]}, map) :: {:noreply, map}
   def handle_cast({:make_transaction, ip_string, transaction_ips}, current_map) do
@@ -73,7 +77,31 @@ defmodule SPV do
     # 4. Find overall hash of the transaction (For all individual parts)
     # 5. Send to {:add_transaction}
 
-    required_blocks = GenServer.call(current_map.associated_full_node, {:get_required_blocks, transaction_ips})
+    # Make a bloom filter using associated public addresses and send to associated full node
+    bloom_filter_for_addresses = BloomFilter.new(10, 0.001)
+    # Add addresses to bloom filter
+    # Enum.each(current_map.public_keys, fn x -> BloomFilter.add(bloom_filter_for_addresses, current_map.public_key) end)
+    bloom_filter_for_addresses = BloomFilter.add(bloom_filter_for_addresses, current_map.public_key)
+
+    # TODO: check if we find the txid in cached blocks
+
+    # Get blocks from associated full node
+    required_blocks =
+     GenServer.call(current_map.associated_full_node, {:get_required_blocks, bloom_filter_for_addresses, current_map.public_key})
+
+    # Add to cached blocks
+    {_, current_map} = 
+      Map.get_and_update(current_map, :cached_blocks, fn x -> {x, required_blocks} end)
+
+    txids_to_find =
+      transaction_ips
+      |> Enum.map(fn x -> x.hash end)
+
+    required_blocks = Enum.filter(required_blocks, fn block ->
+        for tx <- block.tx do
+          tx.txid in txids_to_find
+        end
+    end)
 
     # Input to the are_inputs_valid_and_difference is a string
     amount_with_fee = (String.to_float(amount) + String.to_float(fee)) |> Float.to_string() 
