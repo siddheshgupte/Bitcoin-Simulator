@@ -219,12 +219,9 @@ defmodule FullNode do
     {:noreply, current_map}
   end
 
-  @doc """
-  Verify the entire chain
-  """
-  def handle_cast({:full_verify}, current_map) do
-    verify_blockchain(current_map.chain)
-    {:noreply, current_map}
+  # Verify the entire chain
+  def handle_call(:full_verify, _from, current_map) do
+    {:reply, verify_blockchain(current_map.chain), current_map}
   end
 
   # ----------------------------------------------------------------------------------------------
@@ -322,6 +319,7 @@ defmodule FullNode do
     # 2. Is the block valid?
     # 3. Are all the transactions in this block valid? (Check double spends also here?)
     # 4. Builds on the current known longest chain? (to avoid forks)
+
     {should_propagate, current_map} =
       if is_new_block and UtilityFn.verify_block_hash(block) and
            UtilityFn.check_if_all_transactions_valid(block) and builds_on_curr_longest do
@@ -387,6 +385,12 @@ defmodule FullNode do
     required_blocks = Enum.filter(required_blocks, &(&1 != nil))
     {:reply, required_blocks, current_map}
   end
+
+  # Print state for debugging
+  def handle_call({:get_state}, _from, current_map) do
+    {:reply, current_map, current_map}
+  end
+
 end
 
 # GenServer.cast(:"0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1", {:make_transaction,"0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0"  , [ %{ :hash => "8A12EB159B4EE7320FE4FF04F6C1088D5A8F078A", :n => 0 }]})
