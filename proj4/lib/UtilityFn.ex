@@ -46,6 +46,7 @@ defmodule UtilityFn do
     txids_to_find =
       transaction_ips
       |> Enum.map(fn x -> x.hash end)
+      |> Enum.into(MapSet.new())
 
     # Anonymous functions for filtering in the comprehensions
     ele_in_txids_to_find? = &(&1 in txids_to_find)
@@ -250,10 +251,12 @@ defmodule UtilityFn do
     # 1. Check in uncommitted transactions if the input is equal to the inputs given here
     # 2. Check all blocks' transactions inputs to check if input is equal to the inputs given here 
 
+    transaction_inputs = Enum.into(transaction.in, MapSet.new())
+
     results =
       for uc_tx <- uncommitted_transactions,
           input <- uc_tx.in do
-        input in transaction.in
+        input in transaction_inputs
       end
 
     uncommitted_not_double_spent = Enum.filter(results, fn x -> x != false end) |> length() == 0
@@ -264,7 +267,7 @@ defmodule UtilityFn do
           for block <- chain,
               tx <- block.tx,
               input <- tx.in do
-            input in transaction.in
+            input in transaction_inputs
           end
 
         Enum.filter(results, fn x -> x != false end) |> length() == 0
@@ -306,6 +309,8 @@ defmodule UtilityFn do
   """
   @spec remove_transactions_from_uncommitted_transactions([tx_t], map) :: map
   def remove_transactions_from_uncommitted_transactions(tx_to_remove, current_map) do
+    tx_to_remove = Enum.into(tx_to_remove, MapSet.new())
+
     new_uncommitted =
       Enum.filter(current_map.uncommitted_transactions, fn x -> x not in tx_to_remove end)
 

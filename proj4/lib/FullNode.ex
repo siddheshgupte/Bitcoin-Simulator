@@ -218,8 +218,8 @@ defmodule FullNode do
   end
 
   # Verify the entire chain
-  def handle_call({:full_verify},_from, current_map) do
-    verify_blockchain(current_map.chain)
+  def handle_call(:full_verify, _from, current_map) do
+    {:reply, verify_blockchain(current_map.chain), current_map}
   end
 
   # ----------------------------------------------------------------------------------------------
@@ -317,7 +317,6 @@ defmodule FullNode do
     # 2. Is the block valid?
     # 3. Are all the transactions in this block valid? (Check double spends also here?)
     # 4. Builds on the current known longest chain? (to avoid forks)
-    IO.inspect(block)
 
     {should_propagate, current_map} =
       if is_new_block and UtilityFn.verify_block_hash(block) and
