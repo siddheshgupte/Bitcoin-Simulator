@@ -166,45 +166,47 @@ defmodule FullNode do
       UtilityFn.get_list_highest_priority_uncommitted_transactions(
         current_map.uncommitted_transactions
       )
+    
+    if length(curr_tx) > 0 do 
+      # Remove from uncommitted transactions
+      current_map =
+        UtilityFn.remove_transactions_from_uncommitted_transactions(curr_tx, current_map)
 
-    # Remove from uncommitted transactions
-    current_map =
-      UtilityFn.remove_transactions_from_uncommitted_transactions(curr_tx, current_map)
+      # Make coinbase transaction and add to curr_tx
+      curr_tx = UtilityFn.add_coinbase_transaction(current_map.public_key, curr_tx)
 
-    # Make coinbase transaction and add to curr_tx
-    curr_tx = UtilityFn.add_coinbase_transaction(current_map.public_key, curr_tx)
+      {curr_mrkl_root, curr_mrkl_tree} = UtilityFn.get_mrkl_tree_and_root(curr_tx)
 
-    {curr_mrkl_root, curr_mrkl_tree} = UtilityFn.get_mrkl_tree_and_root(curr_tx)
+      {curr_nonce, curr_hash} =
+        UtilityFn.find_nonce_and_hash(curr_index, curr_prev_hash, curr_time, curr_mrkl_root, 0)
 
-    {curr_nonce, curr_hash} =
-      UtilityFn.find_nonce_and_hash(curr_index, curr_prev_hash, curr_time, curr_mrkl_root, 0)
+      # Make block
+      curr_block = %{
+        # Header
+        :index => curr_index,
+        :hash => curr_hash,
+        :prev_hash => curr_prev_hash,
+        :time => curr_time,
+        :nonce => curr_nonce,
 
-    # Make block
-    curr_block = %{
-      # Header
-      :index => curr_index,
-      :hash => curr_hash,
-      :prev_hash => curr_prev_hash,
-      :time => curr_time,
-      :nonce => curr_nonce,
+        # Transaction Data
+        :mrkl_root => curr_mrkl_root,
+        :n_tx => length(curr_tx),
+        :tx => curr_tx,
+        :mrkl_tree => curr_mrkl_tree,
+        :difficulty => 1
+      }
 
-      # Transaction Data
-      :mrkl_root => curr_mrkl_root,
-      :n_tx => length(curr_tx),
-      :tx => curr_tx,
-      :mrkl_tree => curr_mrkl_tree,
-      :difficulty => 1
-    }
+      # Add block to local chain
+      {_, current_map} = Map.get_and_update(current_map, :chain, fn x -> {x, [curr_block | x]} end)
 
-    # Add block to local chain
-    {_, current_map} = Map.get_and_update(current_map, :chain, fn x -> {x, [curr_block | x]} end)
+      # Start gossip
+      # Send to 8 random neighbours
 
-    # Start gossip
-    # Send to 8 random neighbours
-
-    current_map.neighbours
-    |> Enum.take_random(8)
-    |> Enum.map(&GenServer.cast(&1, {:gossip_block, curr_block}))
+      current_map.neighbours
+      |> Enum.take_random(8)
+      |> Enum.map(&GenServer.cast(&1, {:gossip_block, curr_block}))
+    end
 
     {:noreply, current_map}
   end
