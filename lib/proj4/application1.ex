@@ -68,7 +68,10 @@ defmodule Application1  do
 
     Enum.each(wallets, fn x -> Supervisor.start_child(supervisor, x) end)
     lst_of_nodes
-    periodic_make_transaction(list_of_public_keys,10)
+
+    periodic_make_transaction(list_of_public_keys,100)
+    #periodic_mining(list_of_public_keys,100)
+    
   end
 
   # Make coin base with string identifier
@@ -157,23 +160,38 @@ defmodule Application1  do
   end
 
   def periodic_make_transaction(list_of_public_keys, count) do
+    # receive do construct is used for parallel execution
     receive do
       after
         5_00 ->
         count = count - 1
+        amount =Enum.random(10..100)
         GenServer.cast(String.to_atom("wallet_" <> Enum.random(list_of_public_keys)),
-        {:make_transaction, Enum.random(list_of_public_keys) <> " 10.0 1.0"})
+        {:make_transaction, Enum.random(list_of_public_keys) 
+        <>" "<> Float.to_string(amount/1, decimals: 1)<>" 1.0"})
+         
+        Proj4Web.Endpoint.broadcast! "room:lobby", "new_amount", %{
+            amount: amount,
+          }
 
         :timer.sleep(500)
         GenServer.cast(String.to_atom(Enum.random(list_of_public_keys)),{:mine})
         if count >= 1 do
           periodic_make_transaction(list_of_public_keys,count)
         end
-        
     end
-  # :init.stop
- #   GenServer.cast(:wallet_0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1,
- #    {:make_transaction," 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0 1.0"})
   end
+
+  # def periodic_mining(list_of_public_keys,count) do
+  #   receive do
+  #   after
+  #     5_00 ->
+  #       count = count-1
+  #       GenServer.cast(String.to_atom(Enum.random(list_of_public_keys)),{:mine})
+  #       if count >= 1 do
+  #         periodic_mining(list_of_public_keys,count)
+  #       end
+  #   end
+  # end
 
 end

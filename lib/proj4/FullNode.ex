@@ -140,6 +140,8 @@ defmodule FullNode do
 
       # Start gossip
       # Send to 8 random neighbours
+      # TODO: Call channel
+      broadcast_transaction(1)
 
       current_map.neighbours
       |> Enum.take_random(8)
@@ -166,8 +168,12 @@ defmodule FullNode do
       UtilityFn.get_list_highest_priority_uncommitted_transactions(
         current_map.uncommitted_transactions
       )
-    
+    # Todo no. of commited transcations
+    broadcast_commited_transaction(length(curr_tx))
     if length(curr_tx) > 0 do 
+
+      calculate_num_of_coins(curr_tx)
+
       # Remove from uncommitted transactions
       current_map =
         UtilityFn.remove_transactions_from_uncommitted_transactions(curr_tx, current_map)
@@ -391,7 +397,31 @@ defmodule FullNode do
     {:reply, current_map, current_map}
   end
 
+  def broadcast_transaction(transaction) do
+    Proj4Web.Endpoint.broadcast! "room:lobby", "new_transaction", %{
+      transaction: transaction ,
+    }
+  end
+
+  def calculate_num_of_coins(curr_tx) do
+    amts = 
+    for transaction <- curr_tx,
+      op <- transaction.out do
+        op.amount + transaction.fee + 25.0
+      end 
+   IO.inspect Enum.sum(amts)
+  end
+
+  def broadcast_commited_transaction(commited_transaction) do
+    Proj4Web.Endpoint.broadcast! "room:lobby", "new_commited_transaction", %{
+      commited_transaction: commited_transaction, 
+    }
+  end
+
+
 end
+
+
 
 # GenServer.cast(:"0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1", {:make_transaction,"0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0"  , [ %{ :hash => "8A12EB159B4EE7320FE4FF04F6C1088D5A8F078A", :n => 0 }]})
 # GenServer.cast(:"04EFEB65F418AB164360A5C51A6AA3A8B8B56150F21D6067EAA2C1E0F7FFAFCE472ECAEE94F4CFDF6E8EBCADB3A17C4D584EEFF0E076C9333383651EFEC0C29FFA",{:mine})

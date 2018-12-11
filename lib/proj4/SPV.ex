@@ -175,7 +175,6 @@ defmodule SPV do
         # Set overall hash of the transaction
         |> UtilityFn.find_and_set_overall_hash_of_transaction()
         # Set signature
-        # TODO: Change this to private key of the person doing the transaction
         |> UtilityFn.set_signature_of_transaction(current_map.private_key)
       end
 
@@ -259,3 +258,8 @@ end
 
 # Old transaction call
 # GenServer.cast(:wallet_0441920A72D0B2F76C2D5DB39E034060C38B12B07F99DFCDD6063888312818DF15FC78834C3FE49EBB32B1E7DB540D08A3E07FA8C1D05D3C43A848BE8C8BFCCCA1, {:make_transaction," 048BC7CF874FDFBA95B765BC803D4003BBF4E98081F854D5975DF2E528A336D0726AD5E859A4D9562602C0E29D620834D6510071C7DB21A99ABFEF0F10B637A4C9 10.0 1.0"  , [ %{ :hash => "8A12EB159B4EE7320FE4FF04F6C1088D5A8F078A", :n => 0 }]})
+
+# No. of transactions, Amount of bitcoins mined vs Amount of bitcoins transacted- line chart
+# No. of uncommitted transcations  - line chart
+# No. of uncommitted transcations vs committed transcation - barchart 
+# Avg no. of bitcoins sent / 10 transactions -line chart

@@ -2,7 +2,7 @@ defmodule Proj4Web.UserSocket do
   use Phoenix.Socket
 
   ## Channels
-  # channel "room:*", Proj4Web.RoomChannel
+   channel "room:*", Proj4Web.RoomChannel
 
   # Socket params are passed from the client and can
   # be used to verify and authenticate a user. After
@@ -30,4 +30,6 @@ defmodule Proj4Web.UserSocket do
   #
   # Returning `nil` makes this socket anonymous.
   def id(_socket), do: nil
+
+  #channel "Simulation:*", Proj4Web.SimulationChannel
 end

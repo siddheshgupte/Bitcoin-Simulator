@@ -34,7 +34,7 @@ defmodule MerkleTreeNode do
 
     flat_list = flatten(list_of_list)
 
-    IO.inspect(flat_list)
+   # IO.inspect(flat_list)
 
     leaves =
       Enum.map(flat_list, fn transaction ->

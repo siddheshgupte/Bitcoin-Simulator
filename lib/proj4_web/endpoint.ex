@@ -15,7 +15,7 @@ defmodule Proj4Web.Endpoint do
     gzip: false,
     only: ~w(css fonts images js favicon.ico robots.txt)
 
-  # Code reloading can be explicitly enabled under the
+  # Code reloading can be explicitly enableed under the
   # :code_reloader configuration of your endpoint.
   if code_reloading? do
     socket "/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket

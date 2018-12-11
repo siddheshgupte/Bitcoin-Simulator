@@ -69,8 +69,9 @@ defmodule UtilityFn do
       end
 
     # Sum all the amounts in referenced transaction and compare to amount being sent.
-   IO.inspect amounts_to_sender_in_ip_transactions
+  # IO.inspect amounts_to_sender_in_ip_transactions
    amounts_to_sender_in_ip_transactions = amounts_to_sender_in_ip_transactions |> Enum.filter(&(&1 != nil))
+  #:timer.sleep(100)
     are_inputs_valid? = Enum.sum(amounts_to_sender_in_ip_transactions) >= String.to_float(amount)
 
     if are_inputs_valid? do
