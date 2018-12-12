@@ -21,7 +21,8 @@ h6{font-size: 1.4rem; letter-spacing: 0; line-height: 1.2}
   max-width: 80.0rem;
   padding: 0 2.0rem;
   position: relative;
-  width: 100%
+  width: 60% ;
+  height: 10%;
 }
 select {
   width: auto;
@@ -36,7 +37,7 @@ select {
 }
 .alert-info {
   color: #31708f;
-  background-color: #d9edf7;
+  background-color: #2a2d2e;
   border-color: #bce8f1;
 }
 .alert-warning {

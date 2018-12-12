@@ -13,7 +13,6 @@ defmodule Proj4.Application do
       # Starts a worker by calling: Proj4Server.Worker.start_link(arg)
       # {Proj4Server.Worker, arg},
     ]
-
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Proj4.Supervisor]

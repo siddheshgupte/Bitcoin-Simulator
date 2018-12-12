@@ -56,9 +56,25 @@ socket.connect()
 
 // Now that you are connected, you can join channels with a topic:
 let channel = socket.channel("room:lobby", {})
-
 let chatInput         = document.querySelector("#chat-input")
 let messagesContainer = document.querySelector("#messages")
+let amountInput = document.querySelector("#amount")
+let receiver = document.querySelector("#receiver")
+var list_of_receiver =[]
+var index = 1;
+
+channel.on('list_of_public_keys', msg => {
+  list_of_receiver = msg.list_of_public_keys
+  for(var element in list_of_receiver)
+  {
+   var opt = document.createElement("option");
+   opt.value= index;
+   opt.innerHTML = "publicKey"+index; // whatever property it has
+   // then append it to the select element
+   receiver.appendChild(opt);
+   index++;
+  }
+})
 
 chatInput.addEventListener("keypress", event => {
   if(event.keyCode === 13){
@@ -67,18 +83,34 @@ chatInput.addEventListener("keypress", event => {
   }
 })
 
+
+
 channel.on("new_msg", payload => {
   let messageItem = document.createElement("li")
   messageItem.innerText = `[${Date()}] ${payload.body}`
   messagesContainer.appendChild(messageItem)
 })
+
+amountInput.addEventListener("keypress", event =>{
+  if(event.keyCode === 13){
+    channel.push("mining_amount", {body: amountInput.value})
+    amountInput.value = ""
+  }
+})
+
+receiver.addEventListener("keypress", event =>{
+  if(event.keyCode === 13){
+    channel.push("receiver", {body: chatInput.value})
+  }
+})
+
 var ctx1 = document.getElementById("myChart1");
 var myBarChart = new Chart(ctx1, {
     type: 'bar',
     data: {
         labels: ["Total transcations", "Commited transactions", "UnCommited transactions"],
         datasets: [{
-            label: '# of transactions',
+            label: "transcations",
             data: [0, 0, 0],
             backgroundColor: [
                 'rgba(255, 99, 132, 0.2)',
@@ -112,18 +144,21 @@ var myLineChart = new Chart(ctx2, {
       data: [],
       backgroundColor: "rgba(153,255,51,0.4)"
     },
-    {
-      label: 'Bitcoins mined',
-      data: [],
-      backgroundColor: "rgba(54, 162, 235, 0.2)"
-    }
   ]
   },
   options:  {
+    title : {
+      display: true,
+      text: "Amount of bitcoins transferred per transaction"
+    },
     scales: {
         yAxes: [{
             ticks: {
                 beginAtZero:true
+            },
+            scaleLabel: {
+              display: true,
+              labelString: "bitcoins" 
             }
         }],
         xAxes: [{
@@ -131,6 +166,54 @@ var myLineChart = new Chart(ctx2, {
           position: 'bottom',
           ticks: {
             beginAtZero:true
+          },
+          scaleLabel: {
+            display: true,
+            labelString: "transactions" 
+          }
+        }]
+    }
+}
+});
+
+
+var ctx3= document.getElementById("myChart3")
+
+var myLineChart2 = new Chart(ctx3, {
+  type: 'line',
+  data: {
+    datasets: [
+    {
+      label: 'Bitcoins mined',
+      data: [],
+      backgroundColor: "rgba(54, 162, 235, 0.2)"
+    },
+  ]
+  },
+  options:  {
+    title : {
+      display : true,
+      text: 'Bitcoins commited to blockchain per mining operation'
+    },
+    scales: {
+        yAxes: [{
+            ticks: {
+                beginAtZero:true
+            },
+            scaleLabel: {
+              display: true,
+              labelString: 'Bitcoins'
+            }
+        }],
+        xAxes: [{
+          type: 'linear',
+          position: 'bottom',
+          ticks: {
+            beginAtZero:true
+          },
+          scaleLabel: {
+            display: true,
+            labelString: 'Mining operations'
           }
         }]
     }
@@ -141,8 +224,10 @@ var dict = {
   "transcation_count" : 0,
   "commited_transcation_count" : 0,
   "transaction_amount" : 0,
+  "bitcoin_mined" : 0,
 };
-var count=1;
+var count=0;
+var count2=0;
 
 channel.on('new_transaction', msg => {
   //document.getElementById('status').innerHTML = msg.response
@@ -172,11 +257,28 @@ channel.on('new_amount', msg =>{
   myLineChart.update()
 })
 
+channel.on('new_mined_amount', msg =>{
+  dict["bitcoin_mined"] = dict["bitcoin_mined"] + msg.mined_amount
+  myLineChart2.data.datasets[0].data.push({x:count2,
+     y: dict["bitcoin_mined"] })
+  count2= count2 + 1
+  myLineChart2.update()
+})
+
 
 channel.join()
-  .receive("ok", resp => { console.log("Joined successfully", resp) })
+  .receive("ok", resp => { console.log("Joined successfully", resp)
+  console.log("hiiiii")
+  for(var element in list_of_receiver)
+  {
+   var opt = document.createElement("option");
+   opt.value= index;
+   opt.innerHTML = "publicKey"+index; // whatever property it has
+   // then append it to the select element
+   receiver.appendChild(opt);
+   index++;
+  }
+})
   .receive("error", resp => { console.log("Unable to join", resp) })
-
-
 
 export default socket

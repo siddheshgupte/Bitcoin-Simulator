@@ -169,10 +169,13 @@ defmodule FullNode do
         current_map.uncommitted_transactions
       )
     # Todo no. of commited transcations
+
     broadcast_commited_transaction(length(curr_tx))
     if length(curr_tx) > 0 do 
-
-      calculate_num_of_coins(curr_tx)
+      
+      Proj4Web.Endpoint.broadcast! "room:lobby", "new_mined_amount", %{
+        mined_amount:  calculate_num_of_coins(curr_tx)
+      }
 
       # Remove from uncommitted transactions
       current_map =
@@ -409,7 +412,7 @@ defmodule FullNode do
       op <- transaction.out do
         op.amount + transaction.fee + 25.0
       end 
-   IO.inspect Enum.sum(amts)
+     Enum.sum(amts)
   end
 
   def broadcast_commited_transaction(commited_transaction) do

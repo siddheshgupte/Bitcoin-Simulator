@@ -4,7 +4,6 @@ defmodule Application1  do
   @moduledoc """
   Driver module for initializing the simulation
   """
-
   def start(_type, num_of_nodes) do
     list_of_private_keys =
       1..num_of_nodes
@@ -32,6 +31,8 @@ defmodule Application1  do
           id: String.to_atom(public_key)
         )
       end)
+
+
 
     wallets =
       Enum.zip(list_of_public_keys, list_of_private_keys)
@@ -68,6 +69,11 @@ defmodule Application1  do
 
     Enum.each(wallets, fn x -> Supervisor.start_child(supervisor, x) end)
     lst_of_nodes
+
+    Proj4Web.Endpoint.broadcast! "room:lobby", "list_of_public_keys", %{
+      list_of_public_keys: list_of_public_keys,
+    }
+
 
     periodic_make_transaction(list_of_public_keys,100)
     #periodic_mining(list_of_public_keys,100)

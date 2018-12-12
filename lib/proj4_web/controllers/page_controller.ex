@@ -5,3 +5,4 @@ defmodule Proj4Web.PageController do
     render(conn, "index.html")
   end
 end
+
