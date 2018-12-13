@@ -150,6 +150,7 @@ defmodule FullNode do
 
     {:noreply, current_map}
   end
+  
 
   @doc """
   Starts mining the uncommitted transactions into a block at the current node and

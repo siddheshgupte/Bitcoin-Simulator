@@ -179,7 +179,6 @@ defmodule Application1  do
         Proj4Web.Endpoint.broadcast! "room:lobby", "new_amount", %{
             amount: amount,
           }
-
         :timer.sleep(500)
         GenServer.cast(String.to_atom(Enum.random(list_of_public_keys)),{:mine})
         if count >= 1 do

@@ -60,28 +60,35 @@ let chatInput         = document.querySelector("#chat-input")
 let messagesContainer = document.querySelector("#messages")
 let amountInput = document.querySelector("#amount")
 let receiver = document.querySelector("#receiver")
+
 var list_of_receiver =[]
 var index = 1;
+var transaction = 1;
 
-channel.on('list_of_public_keys', msg => {
-  list_of_receiver = msg.list_of_public_keys
-  for(var element in list_of_receiver)
-  {
-   var opt = document.createElement("option");
-   opt.value= index;
-   opt.innerHTML = "publicKey"+index; // whatever property it has
-   // then append it to the select element
-   receiver.appendChild(opt);
-   index++;
-  }
-})
+// channel.on('list_of_public_keys', msg => {
+//   list_of_receiver = msg.list_of_public_keys
+//   for(var element in list_of_receiver)
+//   {
+//    var opt = document.createElement("option");
+//    opt.value= index;
+//    opt.innerHTML = "publicKey"+index; // whatever property it has
+//    // then append it to the select element
+//    receiver.appendChild(opt);
+//    index++;
+//   }
+// })
 
-chatInput.addEventListener("keypress", event => {
-  if(event.keyCode === 13){
-    channel.push("new_msg", {body: chatInput.value})
-    chatInput.value = ""
-  }
-})
+document.getElementById("myForm").addEventListener("submit", myFunction);
+
+function myFunction() {
+  channel.push("mining_amount", {amount: amountInput.value, receiver: receiver.value})
+  amountInput.value = ""
+  receiver.value= ""
+   let messageItem = document.createElement("li")
+   messageItem.innerText = `Transaction Completed`
+  // transaction = transaction + 1
+  messagesContainer.appendChild(messageItem)
+}
 
 
 
